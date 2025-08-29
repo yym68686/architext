@@ -47,58 +47,142 @@ pip install architext
 
 ## 🚀 快速上手：一次上下文工程实践
 
-下面的例子将演示如何使用 `Architext` 对 LLM 的输入进行一次动态的“上下文重构”。
+`Architext` 的核心在于其直观、灵活的 API。下面通过一系列独立的示例，展示如何利用它进行高效的上下文工程。
+
+### 示例 1: 基础布局与首次渲染
+
+这是最基础的用法。我们声明式地构建一个包含 `System` 和 `User` 消息的对话结构。
 
 ```python
+# --- 示例 1: 基础布局 ---
 import asyncio
-# 假设这些类位于您的 architext 库中
-from architext import Messages, SystemMessage, UserMessage, Texts, Files, Tools
+from architext import Messages, SystemMessage, UserMessage, Texts, Tools
 
-async def main():
-    # 1. 定义你的上下文源 (Context Providers)
-    system_prompt = Texts("system_prompt", "你是一个代码分析助手。")
-    tools = Tools(tools_json=[{"name": "run_test"}])
-    files = Files()
+async def example_1():
+    # 1. 定义你的上下文提供者
+    tools_provider = Tools(tools_json=[{"name": "run_test"}])
+    system_prompt = Texts("system_prompt", "你是一个专业的AI代码审查员。")
 
-    # 2. 声明式地构建初始消息布局
+    # 2. 声明式地构建消息列表
     messages = Messages(
-        SystemMessage(system_prompt, tools), # 系统消息包含基础提示和工具
-        UserMessage(files) # 用户消息最初只包含文件内容
+        SystemMessage(system_prompt, tools_provider),
+        UserMessage(Texts("user_input", "请帮我审查以下Python代码。"))
     )
-    # 为文件提供者注入初始内容
-    files.update("main.py", "def hello(): print('world')")
 
-    # 3. 初始状态：让 LLM 分析文件
-    print("--- 初始上下文结构 ---")
-    messages.append(UserMessage(Texts("prompt", "分析这个文件。")))
+    # 3. 渲染最终的 messages 列表
+    print("--- 示例 1: 渲染结果 ---")
     for msg in await messages.render():
         print(msg)
 
-    # 假设 LLM 回复需要运行测试...
-
-    # 4. 上下文重构：为了执行测试，将工具移动到用户消息中，以获得更强的指令性
-    print("\n--- 上下文重构：移动'tools'块 ---")
-
-    # a. 从 SystemMessage 全局弹出 'tools' provider
-    tools_provider = messages.pop("tools")
-
-    # b. 创建一个新的 UserMessage，并将弹出的 provider 和新的指令插入其中
-    if tools_provider:
-        new_user_message = UserMessage(
-            tools_provider, # 将工具上下文放在前面
-            Texts("prompt", "现在，请使用以上工具运行测试。")
-        )
-        messages.append(new_user_message)
-
-    # 5. 渲染重构后的最终上下文
-    print("\n--- 重构后的最终上下文 ---")
-    for msg in await messages.render():
-        print(msg)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(example_1())
 ```
-在这个例子中，我们动态地将 `tools` 上下文从 `SystemMessage` 移动到了一个新的 `UserMessage` 中，这种精确到消息级别的实时重构正是**上下文工程**的核心实践。
+
+**预期输出:**
+```
+--- 示例 1: 渲染结果 ---
+{'role': 'system', 'content': '你是一个专业的AI代码审查员。\n\n<tools>[{\'name\': \'run_test\'}]</tools>'}
+{'role': 'user', 'content': '请帮我审查以下Python代码。'}
+```
+
+---
+
+### 示例 2: 穿透更新与自动刷新
+
+`Architext` 的强大之处在于您可以随时更新底层的上下文源，而系统会在下次渲染时自动、高效地刷新内容。
+
+```python
+# --- 示例 2: 穿透更新 ---
+import asyncio
+from architext import Messages, UserMessage, Files
+
+async def example_2():
+    # 1. 初始化一个包含文件提供者的消息
+    files_provider = Files()
+    messages = Messages(
+        UserMessage(files_provider)
+    )
+
+    # 2. 此刻文件内容为空，渲染结果为空列表
+    print("--- 初始状态 (文件内容为空) ---")
+    print(await messages.render())
+
+    # 3. 通过穿透接口更新文件内容
+    # 这会自动将 files_provider 标记为“过期”
+    print("\n>>> 通过 messages.provider 更新文件...")
+    file_instance = messages.provider("files")
+    if file_instance:
+        file_instance.update("main.py", "def main():\n    pass")
+
+    # 4. 再次渲染，Architext 会自动刷新已过期的 provider
+    print("\n--- 更新后再次渲染 ---")
+    for msg in await messages.render():
+        print(msg)
+
+asyncio.run(example_2())
+```
+
+**预期输出:**
+```
+--- 初始状态 (文件内容为空) ---
+[]
+
+>>> 通过 messages.provider 更新文件...
+
+--- 更新后再次渲染 ---
+{'role': 'user', 'content': "<files>\n<file path='main.py'>def main():\n    pass...</file>\n</files>"}
+```
+
+---
+
+### 示例 3: 动态重构上下文 (`pop` 和 `insert`)
+
+这是**上下文工程**的核心实践。您可以像操作列表一样，动态地将一个内容块从一条消息移动到另一条消息，以适应不同的任务需求。
+
+```python
+# --- 示例 3: 动态重构 ---
+import asyncio
+from architext import Messages, SystemMessage, UserMessage, Texts, Tools
+
+async def example_3():
+    # 1. 初始布局：工具在 SystemMessage 中
+    tools_provider = Tools(tools_json=[{"name": "run_test"}])
+    messages = Messages(
+        SystemMessage(tools_provider),
+        UserMessage(Texts("user_input", "分析代码并运行测试。"))
+    )
+    print("--- 初始布局 ---")
+    for msg in await messages.render(): print(msg)
+
+    # 2. 运行时决策：为了更强的指令性，将工具上下文移动到用户消息中
+    print("\n>>> 重构上下文：将 'tools' 块移动到 UserMessage...")
+
+    # a. 从任何消息中全局弹出 'tools' 提供者
+    popped_tools_provider = messages.pop("tools")
+
+    # b. 通过索引精确定位到 UserMessage (messages[1])，并插入它
+    if popped_tools_provider:
+        messages[1].content.insert(0, popped_tools_provider)
+
+    # 3. 查看重构后的结果
+    print("\n--- 重构后的最终布局 ---")
+    for msg in await messages.render(): print(msg)
+
+asyncio.run(example_3())
+```
+
+**预期输出:**
+```
+--- 初始布局 ---
+{'role': 'system', 'content': "<tools>[{'name': 'run_test'}]</tools>"}
+{'role': 'user', 'content': '分析代码并运行测试。'}
+
+>>> 重构上下文：将 'tools' 块移动到 UserMessage...
+
+--- 重构后的最终布局 ---
+{'role': 'system', 'content': ''}
+{'role': 'user', 'content': "<tools>[{'name': 'run_test'}]</tools>\n\n分析代码并运行测试。"}
+```
+*(注意: SystemMessage 的内容变为空，因为它唯一的块被移走了，所以在最终渲染时可能会被过滤掉)*
 
 ## 🤝 贡献 (Contributing)
 
