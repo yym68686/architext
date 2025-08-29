@@ -21,8 +21,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(len(messages), 2)
-        await messages.refresh()
-        rendered = messages.render()
+        rendered = await messages.render_latest()
 
         self.assertEqual(len(rendered), 2)
         self.assertIn("<tools>", rendered[0]['content'])
@@ -67,8 +66,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         )
 
         # 验证初始状态
-        await messages.refresh()
-        initial_rendered = messages.render()
+        initial_rendered = await messages.render_latest()
         self.assertTrue(any("<tools>" in msg['content'] for msg in initial_rendered if msg['role'] == 'system'))
 
         # 全局弹出 'tools' Provider

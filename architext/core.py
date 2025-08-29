@@ -104,6 +104,11 @@ class Messages:
         results = [msg.to_dict() for msg in self._messages]
         return [res for res in results if res]
 
+    async def render_latest(self) -> List[Dict[str, Any]]:
+        """A convenience method that refreshes all providers and then renders."""
+        await self.refresh()
+        return self.render()
+
     def append(self, message: Message):
         self._messages.append(message)
         for p in message.providers():
@@ -131,8 +136,7 @@ async def run_demo():
     )
 
     print("\n--- 渲染后的初始 Messages (首次渲染，全部刷新) ---")
-    await messages.refresh()
-    for msg_dict in messages.render(): print(msg_dict)
+    for msg_dict in await messages.render_latest(): print(msg_dict)
     print("-" * 40)
 
     # --- 3. 演示穿透更新 ---
@@ -144,8 +148,7 @@ async def run_demo():
         files_provider_instance.update("file1.py", "这是新的文件内容！")
 
     print("\n--- 再次渲染 Messages (只有文件提供者会刷新) ---")
-    await messages.refresh()
-    for msg_dict in messages.render(): print(msg_dict)
+    for msg_dict in await messages.render_latest(): print(msg_dict)
     print("-" * 40)
 
     # --- 4. 演示全局 Pop 和通过索引 Insert ---

@@ -74,7 +74,8 @@ async def example_1():
 
     # 3. 渲染最终的 messages 列表
     print("--- 示例 1: 渲染结果 ---")
-    for msg in await messages.render():
+    # .render_latest() 会自动刷新并渲染
+    for msg in await messages.render_latest():
         print(msg)
 
 asyncio.run(example_1())
@@ -107,7 +108,7 @@ async def example_2():
 
     # 2. 此刻文件内容为空，渲染结果为空列表
     print("--- 初始状态 (文件内容为空) ---")
-    print(await messages.render())
+    print(await messages.render_latest())
 
     # 3. 通过穿透接口更新文件内容
     # 这会自动将 files_provider 标记为“过期”
@@ -118,7 +119,7 @@ async def example_2():
 
     # 4. 再次渲染，Architext 会自动刷新已过期的 provider
     print("\n--- 更新后再次渲染 ---")
-    for msg in await messages.render():
+    for msg in await messages.render_latest():
         print(msg)
 
 asyncio.run(example_2())
@@ -154,7 +155,7 @@ async def example_3():
         UserMessage(Texts("user_input", "分析代码并运行测试。"))
     )
     print("--- 初始布局 ---")
-    for msg in await messages.render(): print(msg)
+    for msg in await messages.render_latest(): print(msg)
 
     # 2. 运行时决策：为了更强的指令性，将工具上下文移动到用户消息中
     print("\n>>> 重构上下文：将 'tools' 块移动到 UserMessage...")
@@ -168,7 +169,8 @@ async def example_3():
 
     # 3. 查看重构后的结果
     print("\n--- 重构后的最终布局 ---")
-    for msg in await messages.render(): print(msg)
+    # 此处无需刷新，所以我们使用同步的 .render()
+    for msg in messages.render(): print(msg)
 
 asyncio.run(example_3())
 ```

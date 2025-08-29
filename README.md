@@ -74,7 +74,8 @@ async def example_1():
 
     # 3. Render the final messages list
     print("--- Example 1: Render Result ---")
-    for msg in await messages.render():
+    # .render_latest() automatically refreshes and then renders
+    for msg in await messages.render_latest():
         print(msg)
 
 asyncio.run(example_1())
@@ -107,7 +108,7 @@ async def example_2():
 
     # 2. At this moment, the file content is empty, so the render result is an empty list
     print("--- Initial State (File content is empty) ---")
-    print(await messages.render())
+    print(await messages.render_latest())
 
     # 3. Update the file content via the pass-through interface
     # This automatically marks the files_provider as "dirty"
@@ -118,7 +119,7 @@ async def example_2():
 
     # 4. Render again, Architext will automatically refresh the dirty provider
     print("\n--- Render After Update ---")
-    for msg in await messages.render():
+    for msg in await messages.render_latest():
         print(msg)
 
 asyncio.run(example_2())
@@ -154,7 +155,7 @@ async def example_3():
         UserMessage(Texts("user_input", "Analyze the code and run the tests."))
     )
     print("--- Initial Layout ---")
-    for msg in await messages.render(): print(msg)
+    for msg in await messages.render_latest(): print(msg)
 
     # 2. Runtime decision: Move the tools context to the user message for stronger instruction
     print("\n>>> Refactoring context: Moving 'tools' block to UserMessage...")
@@ -168,7 +169,8 @@ async def example_3():
 
     # 3. View the refactored result
     print("\n--- Final Layout After Refactoring ---")
-    for msg in await messages.render(): print(msg)
+    # No refresh needed, so we use the synchronous .render()
+    for msg in messages.render(): print(msg)
 
 asyncio.run(example_3())
 ```
