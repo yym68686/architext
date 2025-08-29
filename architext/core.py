@@ -43,35 +43,24 @@ class Files(ContextProvider):
         if not self._files: return None
         return "<files>\n" + "\n".join([f"<file path='{p}'>{c[:50]}...</file>" for p, c in self._files.items()]) + "\n</files>"
 
-Item = Union[ContentBlock, ContextProvider]
-
 # 3. 消息内容类与消息类
 class MessageContent:
-    def __init__(self, items: List[Item]): self._items: List[Item] = items
+    def __init__(self, items: List[ContextProvider]): self._items: List[ContextProvider] = items
     async def render(self) -> str:
-        tasks = []
-        for item in self._items:
-            if isinstance(item, ContextProvider):
-                tasks.append(item.render())
-            elif isinstance(item, ContentBlock):
-                # 为了统一处理，将 ContentBlock 也包装成一个已完成的 Future
-                future = asyncio.Future()
-                future.set_result(item)
-                tasks.append(future)
-
+        tasks = [item.render() for item in self._items]
         blocks = await asyncio.gather(*tasks)
         return "\n\n".join(b.content for b in blocks if b and b.content)
-    def pop(self, name: str) -> Optional[Item]:
+    def pop(self, name: str) -> Optional[ContextProvider]:
         for i, item in enumerate(self._items):
             if hasattr(item, 'name') and item.name == name: return self._items.pop(i)
         return None
-    def insert(self, index: int, item: Item): self._items.insert(index, item)
-    def append(self, item: Item): self._items.append(item)
-    def providers(self) -> List[ContextProvider]: return [item for item in self._items if isinstance(item, ContextProvider)]
+    def insert(self, index: int, item: ContextProvider): self._items.insert(index, item)
+    def append(self, item: ContextProvider): self._items.append(item)
+    def providers(self) -> List[ContextProvider]: return self._items
     def __repr__(self): return f"Content(items={[item.name for item in self._items if hasattr(item, 'name')]})"
 
 class Message(ABC):
-    def __init__(self, role: str, *initial_items: Item): self.role = role; self.content = MessageContent(list(initial_items))
+    def __init__(self, role: str, *initial_items: ContextProvider): self.role = role; self.content = MessageContent(list(initial_items))
     async def to_dict(self) -> Optional[Dict[str, Any]]:
         rendered_content = await self.content.render()
         if not rendered_content: return None
@@ -95,7 +84,7 @@ class Messages:
         for msg in self._messages: all_providers.extend(msg.content.providers())
         self._context_builder = ContextBuilder(all_providers)
     def provider(self, name: str) -> Optional[ContextProvider]: return self._context_builder.get_provider(name)
-    def pop(self, name: str) -> Optional[Item]:
+    def pop(self, name: str) -> Optional[ContextProvider]:
         for message in self._messages:
             popped_item = message.content.pop(name)
             if popped_item: return popped_item
