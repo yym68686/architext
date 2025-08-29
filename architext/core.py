@@ -1,5 +1,6 @@
-import asyncio
 import base64
+import asyncio
+import logging
 import mimetypes
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
@@ -53,6 +54,7 @@ class Images(ContextProvider):
                 if not mime_type: mime_type = "application/octet-stream" # Fallback
                 return f"data:{mime_type};base64,{encoded_string}"
         except FileNotFoundError:
+            logging.warning(f"Image file not found: {self.image_path}. Skipping.")
             return None # Or handle error appropriately
 
 # 3. 消息类 (已合并 MessageContent)
