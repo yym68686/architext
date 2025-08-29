@@ -39,7 +39,7 @@ class Files(ContextProvider):
     def update(self, path: str, content: str): self._files[path] = content; self.mark_stale()
     async def _fetch_content(self) -> str:
         if not self._files: return None
-        return "<files>\n" + "\n".join([f"<file path='{p}'>{c[:50]}...</file>" for p, c in self._files.items()]) + "\n</files>"
+        return "<files>\n" + "\n".join([f"<file path='{p}'>{c}...</file>" for p, c in self._files.items()]) + "\n</files>"
 
 class Images(ContextProvider):
     def __init__(self, image_path: str, name: Optional[str] = None):
