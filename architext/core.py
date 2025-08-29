@@ -1,12 +1,13 @@
 import asyncio
+from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 
 # 1. 核心数据结构: ContentBlock
+@dataclass
 class ContentBlock:
-    def __init__(self, name: str, content: str, provider: Optional['ContextProvider'] = None):
-        self.name = name; self.content = content; self.provider = provider
-    def __repr__(self): return f"Block(name='{self.name}')"
+    name: str
+    content: str
 
 # 2. 上下文提供者 (带缓存)
 class ContextProvider(ABC):
@@ -24,7 +25,7 @@ class ContextProvider(ABC):
     @abstractmethod
     async def _fetch_content(self) -> Optional[str]: raise NotImplementedError
     def get_content_block(self) -> Optional[ContentBlock]:
-        if self._cached_content is not None: return ContentBlock(self.name, self._cached_content, self)
+        if self._cached_content is not None: return ContentBlock(self.name, self._cached_content)
         return None
 
 class Texts(ContextProvider):
