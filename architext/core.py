@@ -70,24 +70,33 @@ class SystemMessage(Message):
 class UserMessage(Message):
     def __init__(self, *items): super().__init__("user", *items)
 
-# 4. 上下文构建器 (内部使用)
-class ContextBuilder:
-    def __init__(self, providers: List[ContextProvider]): self.providers = {p.name: p for p in providers}
-    def get_provider(self, name: str) -> Optional[ContextProvider]: return self.providers.get(name)
-
-# 5. 顶层容器: Messages
+# 4. 顶层容器: Messages
 class Messages:
     def __init__(self, *initial_messages: Message):
         self._messages: List[Message] = list(initial_messages)
-        all_providers = []
-        for msg in self._messages: all_providers.extend(msg.providers())
-        self._context_builder = ContextBuilder(all_providers)
-    def provider(self, name: str) -> Optional[ContextProvider]: return self._context_builder.get_provider(name)
+        self._providers_index: Dict[str, ContextProvider] = {}
+        for msg in self._messages:
+            for p in msg.providers():
+                if p.name not in self._providers_index:
+                    self._providers_index[p.name] = p
+
+    def provider(self, name: str) -> Optional[ContextProvider]:
+        return self._providers_index.get(name)
+
     def pop(self, name: str) -> Optional[ContextProvider]:
+        popped_item = None
         for message in self._messages:
-            popped_item = message.pop(name)
-            if popped_item: return popped_item
-        return None
+            # Try to pop from the current message
+            item = message.pop(name)
+            if item:
+                popped_item = item
+                break  # Found and popped, exit the loop
+
+        # If an item was popped, also remove it from the index
+        if popped_item and popped_item.name in self._providers_index:
+            del self._providers_index[popped_item.name]
+
+        return popped_item
     async def render(self) -> List[Dict[str, Any]]:
         tasks = [msg.to_dict() for msg in self._messages]
         results = await asyncio.gather(*tasks)
@@ -95,7 +104,8 @@ class Messages:
     def append(self, message: Message):
         self._messages.append(message)
         for p in message.providers():
-            if p.name not in self._context_builder.providers: self._context_builder.providers[p.name] = p
+            if p.name not in self._providers_index:
+                self._providers_index[p.name] = p
     def __getitem__(self, index: int) -> Message: return self._messages[index]
     def __len__(self) -> int: return len(self._messages)
     def __iter__(self): return iter(self._messages)
