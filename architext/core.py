@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import mimetypes
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
@@ -43,6 +45,20 @@ class Files(ContextProvider):
         if not self._files: return None
         return "<files>\n" + "\n".join([f"<file path='{p}'>{c[:50]}...</file>" for p, c in self._files.items()]) + "\n</files>"
 
+class Images(ContextProvider):
+    def __init__(self, name: str, image_path: str):
+        super().__init__(name)
+        self.image_path = image_path
+    async def _fetch_content(self) -> Optional[str]:
+        try:
+            with open(self.image_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                mime_type, _ = mimetypes.guess_type(self.image_path)
+                if not mime_type: mime_type = "application/octet-stream" # Fallback
+                return f"data:{mime_type};base64,{encoded_string}"
+        except FileNotFoundError:
+            return None # Or handle error appropriately
+
 # 3. 消息类 (已合并 MessageContent)
 class Message(ABC):
     def __init__(self, role: str, *initial_items: ContextProvider):
@@ -60,9 +76,32 @@ class Message(ABC):
     def providers(self) -> List[ContextProvider]: return self._items
     def __repr__(self): return f"Message(role='{self.role}', items={[i.name for i in self._items]})"
     def to_dict(self) -> Optional[Dict[str, Any]]:
-        rendered_content = self._render_content()
-        if not rendered_content: return None
-        return {"role": self.role, "content": rendered_content}
+        is_multimodal = any(isinstance(p, Images) for p in self._items)
+
+        if not is_multimodal:
+            # Original string-based rendering
+            rendered_content = self._render_content()
+            if not rendered_content: return None
+            return {"role": self.role, "content": rendered_content}
+        else:
+            # New list-based rendering for multimodal content
+            content_list = []
+            for item in self._items:
+                block = item.get_content_block()
+                if not block or not block.content: continue
+
+                if isinstance(item, Images):
+                    content_list.append({
+                        "type": "image_url",
+                        "image_url": {"url": block.content}
+                    })
+                else: # Treat all others as text
+                    content_list.append({
+                        "type": "text",
+                        "text": block.content
+                    })
+            if not content_list: return None
+            return {"role": self.role, "content": content_list}
 
 class SystemMessage(Message):
     def __init__(self, *items): super().__init__("system", *items)
@@ -167,6 +206,29 @@ async def run_demo():
     # No refresh needed here as no content has changed, just moved
     for msg_dict in messages.render(): print(msg_dict)
     print("-" * 40)
+
+    # --- 5. 演示多模态渲染 ---
+    print("\n>>> 场景 D: 演示多模态 (文本+图片) 渲染")
+    # Create a dummy image file for demo purposes
+    with open("dummy_image.png", "w") as f:
+        f.write("This is a dummy image file.")
+
+    multimodal_message = Messages(
+        UserMessage(
+            Texts("prompt", "What do you see in this image?"),
+            Images("image", "dummy_image.png")
+        )
+    )
+    print("\n--- 渲染后的多模态 Message ---")
+    for msg_dict in await multimodal_message.render_latest():
+        # Print only a snippet of the base64 content for brevity
+        if isinstance(msg_dict['content'], list):
+            for item in msg_dict['content']:
+                if item['type'] == 'image_url':
+                    item['image_url']['url'] = item['image_url']['url'][:80] + "..."
+        print(msg_dict)
+    print("-" * 40)
+
 
 if __name__ == "__main__":
     asyncio.run(run_demo())

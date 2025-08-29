@@ -189,6 +189,49 @@ asyncio.run(example_3())
 ```
 *(Note: The content of SystemMessage becomes empty because its only block was moved, so it might be filtered out in the final rendering)*
 
+---
+
+### Example 4: Multimodal Context (Text + Image)
+
+`Architext` natively supports multimodal context construction, automatically formatting the output to match APIs like OpenAI's.
+
+```python
+# --- Example 4: Multimodal ---
+import asyncio
+from architext import Messages, UserMessage, Texts, Images
+
+async def example_4():
+    # Create a dummy image for the example
+    with open("example_image.png", "w") as f: f.write("dummy")
+
+    messages = Messages(
+        UserMessage(
+            Texts("prompt", "What is in this image?"),
+            Images("image_input", "example_image.png")
+        )
+    )
+
+    print("--- Multimodal Render Result ---")
+    for msg in await messages.render_latest():
+        # Hide the long base64 string for readability
+        for part in msg['content']:
+            if part['type'] == 'image_url':
+                part['image_url']['url'] = part['image_url']['url'][:80] + "..."
+        print(msg)
+
+    # Clean up the dummy file
+    import os
+    os.remove("example_image.png")
+
+asyncio.run(example_4())
+```
+
+**Expected Output:**
+```
+--- Multimodal Render Result ---
+{'role': 'user', 'content': [{'type': 'text', 'text': 'What is in this image?'}, {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,ZHVtbXk=...'}}]}
+```
+
 ## 🤝 Contributing
 
 Context Engineering is an exciting new field. We welcome contributions of all forms to jointly explore building smarter, more efficient AI Agents. Whether it's reporting a bug, proposing a new feature, or submitting code, your participation is crucial.

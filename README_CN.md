@@ -189,6 +189,49 @@ asyncio.run(example_3())
 ```
 *(注意: SystemMessage 的内容变为空，因为它唯一的块被移走了，所以在最终渲染时可能会被过滤掉)*
 
+---
+
+### 示例 4: 多模态上下文 (文本 + 图片)
+
+`Architext` 原生支持多模态上下文的构建，能自动格式化输出以匹配 OpenAI 等主流 API。
+
+```python
+# --- 示例 4: 多模态 ---
+import asyncio
+from architext import Messages, UserMessage, Texts, Images
+
+async def example_4():
+    # 为示例创建一个虚拟图片文件
+    with open("example_image.png", "w") as f: f.write("dummy")
+
+    messages = Messages(
+        UserMessage(
+            Texts("prompt", "这张图片里有什么？"),
+            Images("image_input", "example_image.png")
+        )
+    )
+
+    print("--- 多模态渲染结果 ---")
+    for msg in await messages.render_latest():
+        # 为保持简洁，隐藏冗长的 base64 字符串
+        for part in msg['content']:
+            if part['type'] == 'image_url':
+                part['image_url']['url'] = part['image_url']['url'][:80] + "..."
+        print(msg)
+
+    # 清理虚拟文件
+    import os
+    os.remove("example_image.png")
+
+asyncio.run(example_4())
+```
+
+**预期输出:**
+```
+--- 多模态渲染结果 ---
+{'role': 'user', 'content': [{'type': 'text', 'text': '这张图片里有什么？'}, {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,ZHVtbXk=...'}}]}
+```
+
 ## 🤝 贡献 (Contributing)
 
 上下文工程是一个激动人心的新领域。我们欢迎任何形式的贡献，共同探索构建更智能、更高效的 AI Agent。无论是报告 Bug、提出新功能，还是提交代码，您的参与都至关重要。

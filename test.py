@@ -85,6 +85,74 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         user_message_content = next(msg['content'] for msg in rendered_after_insert if msg['role'] == 'user')
         self.assertTrue(user_message_content.startswith("<tools>"))
 
+    async def test_d_multimodal_rendering(self):
+        """测试多模态（文本+图片）渲染"""
+        # Create a dummy image file for the test
+        dummy_image_path = "test_dummy_image.png"
+        with open(dummy_image_path, "w") as f:
+            f.write("dummy content")
+
+        messages = Messages(
+            UserMessage(
+                Texts("prompt", "Describe the image."),
+                Images("image", dummy_image_path)
+            )
+        )
+
+        rendered = await messages.render_latest()
+        self.assertEqual(len(rendered), 1)
+
+        content = rendered[0]['content']
+        self.assertIsInstance(content, list)
+        self.assertEqual(len(content), 2)
+
+        # Check text part
+        self.assertEqual(content[0]['type'], 'text')
+        self.assertEqual(content[0]['text'], 'Describe the image.')
+
+        # Check image part
+        self.assertEqual(content[1]['type'], 'image_url')
+        self.assertIn('data:image/png;base64,', content[1]['image_url']['url'])
+
+        # Clean up the dummy file
+        import os
+        os.remove(dummy_image_path)
+
+    async def test_e_multimodal_type_switching(self):
+        """测试多模态消息在pop图片后是否能正确回退到字符串渲染"""
+        dummy_image_path = "test_dummy_image_2.png"
+        with open(dummy_image_path, "w") as f:
+            f.write("dummy content")
+
+        messages = Messages(
+            UserMessage(
+                Texts("prefix", "Look at this:"),
+                Images("image", dummy_image_path),
+                Texts("suffix", "Any thoughts?")
+            )
+        )
+
+        # 1. Initial multimodal render
+        rendered_multi = await messages.render_latest()
+        content_multi = rendered_multi[0]['content']
+        self.assertIsInstance(content_multi, list)
+        self.assertEqual(len(content_multi), 3) # prefix, image, suffix
+
+        # 2. Pop the image
+        popped_image = messages.pop("image")
+        self.assertIsNotNone(popped_image)
+
+        # 3. Render again, should fall back to string content
+        rendered_str = messages.render() # No refresh needed
+        content_str = rendered_str[0]['content']
+        self.assertIsInstance(content_str, str)
+        self.assertEqual(content_str, "Look at this:\n\nAny thoughts?")
+
+        # Clean up
+        import os
+        os.remove(dummy_image_path)
+
+
 if __name__ == '__main__':
     # 为了在普通脚本环境中运行，添加这两行
     suite = unittest.TestSuite()
