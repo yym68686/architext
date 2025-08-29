@@ -207,7 +207,7 @@ async def example_4():
     messages = Messages(
         UserMessage(
             Texts("prompt", "这张图片里有什么？"),
-            Images("image_input", "example_image.png")
+            Images("example_image.png") # name 参数是可选的
         )
     )
 

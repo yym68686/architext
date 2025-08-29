@@ -46,8 +46,8 @@ class Files(ContextProvider):
         return "<files>\n" + "\n".join([f"<file path='{p}'>{c[:50]}...</file>" for p, c in self._files.items()]) + "\n</files>"
 
 class Images(ContextProvider):
-    def __init__(self, name: str, image_path: str):
-        super().__init__(name)
+    def __init__(self, image_path: str, name: Optional[str] = None):
+        super().__init__(name or image_path)
         self.image_path = image_path
     async def _fetch_content(self) -> Optional[str]:
         try:
@@ -230,7 +230,7 @@ async def run_demo():
     multimodal_message = Messages(
         UserMessage(
             Texts("prompt", "What do you see in this image?"),
-            Images("image", "dummy_image.png")
+            Images("dummy_image.png") # Name is now optional
         )
     )
     print("\n--- 渲染后的多模态 Message ---")

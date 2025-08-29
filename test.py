@@ -95,7 +95,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         messages = Messages(
             UserMessage(
                 Texts("prompt", "Describe the image."),
-                Images("image", dummy_image_path)
+                Images(dummy_image_path) # Test with optional name
             )
         )
 
@@ -127,7 +127,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         messages = Messages(
             UserMessage(
                 Texts("prefix", "Look at this:"),
-                Images("image", dummy_image_path),
+                Images(dummy_image_path, name="image"), # Explicit name for popping
                 Texts("suffix", "Any thoughts?")
             )
         )
