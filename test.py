@@ -9,15 +9,15 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         """在每个测试前设置环境"""
-        self.system_prompt_provider = StaticTextProvider("system_prompt", "你是一个AI助手。")
-        self.tools_provider = ToolsProvider(tools_json=[{"name": "read_file"}])
-        self.files_provider = FileContentProvider()
+        self.system_prompt_provider = Texts("system_prompt", "你是一个AI助手。")
+        self.tools_provider = Tools(tools_json=[{"name": "read_file"}])
+        self.files_provider = Files()
 
     async def test_a_initial_construction_and_render(self):
         """测试优雅的初始化和首次渲染"""
         messages = Messages(
             SystemMessage(self.system_prompt_provider, self.tools_provider),
-            UserMessage(self.files_provider, StaticTextProvider("user_input", "这是我的初始问题。"))
+            UserMessage(self.files_provider, Texts("user_input", "这是我的初始问题。"))
         )
 
         self.assertEqual(len(messages), 2)

@@ -44,7 +44,6 @@
 ```bash
 pip install architext
 ```
-*(注意: `architext` 包名仅为示例，您可能需要检查其在 PyPI 上的可用性)*
 
 ## 🚀 快速上手：一次上下文工程实践
 
@@ -53,14 +52,13 @@ pip install architext
 ```python
 import asyncio
 # 假设这些类位于您的 architext 库中
-from architext.core import Messages, SystemMessage, UserMessage
-from architext.providers import StaticTextProvider, FileContentProvider, ToolsProvider
+from architext import Messages, SystemMessage, UserMessage, Texts, Files, Tools
 
 async def main():
     # 1. 定义你的上下文源 (Context Providers)
-    system_prompt = StaticTextProvider("system_prompt", "你是一个代码分析助手。")
-    tools = ToolsProvider(tools_json=[{"name": "run_test"}])
-    files = FileContentProvider()
+    system_prompt = Texts("system_prompt", "你是一个代码分析助手。")
+    tools = Tools(tools_json=[{"name": "run_test"}])
+    files = Files()
 
     # 2. 声明式地构建初始消息布局
     messages = Messages(
@@ -72,7 +70,7 @@ async def main():
 
     # 3. 初始状态：让 LLM 分析文件
     print("--- 初始上下文结构 ---")
-    messages.append(UserMessage(StaticTextProvider("prompt", "分析这个文件。")))
+    messages.append(UserMessage(Texts("prompt", "分析这个文件。")))
     for msg in await messages.render():
         print(msg)
 
@@ -88,7 +86,7 @@ async def main():
     if tools_provider:
         new_user_message = UserMessage(
             tools_provider, # 将工具上下文放在前面
-            StaticTextProvider("prompt", "现在，请使用以上工具运行测试。")
+            Texts("prompt", "现在，请使用以上工具运行测试。")
         )
         messages.append(new_user_message)
 

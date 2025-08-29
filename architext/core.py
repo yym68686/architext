@@ -28,15 +28,15 @@ class ContextProvider(ABC):
         if self._cached_content is not None: return ContentBlock(self.name, self._cached_content, self)
         return None
 
-class StaticTextProvider(ContextProvider):
+class Texts(ContextProvider):
     def __init__(self, name: str, text: str): super().__init__(name); self._text = text
     async def _fetch_content(self) -> str: return self._text
 
-class ToolsProvider(ContextProvider):
+class Tools(ContextProvider):
     def __init__(self, tools_json: List[Dict]): super().__init__("tools"); self._tools_json = tools_json
     async def _fetch_content(self) -> str: return f"<tools>{str(self._tools_json)}</tools>"
 
-class FileContentProvider(ContextProvider):
+class Files(ContextProvider):
     def __init__(self): super().__init__("files"); self._files: Dict[str, str] = {}
     def update(self, path: str, content: str): self._files[path] = content; self.mark_stale()
     async def _fetch_content(self) -> str:
@@ -118,15 +118,15 @@ class Messages:
 # ==============================================================================
 async def run_demo():
     # --- 1. 初始化提供者 ---
-    system_prompt_provider = StaticTextProvider("system_prompt", "你是一个AI助手。")
-    tools_provider = ToolsProvider(tools_json=[{"name": "read_file"}])
-    files_provider = FileContentProvider()
+    system_prompt_provider = Texts("system_prompt", "你是一个AI助手。")
+    tools_provider = Tools(tools_json=[{"name": "read_file"}])
+    files_provider = Files()
 
     # --- 2. 演示新功能：优雅地构建 Messages ---
     print("\n>>> 场景 A: 使用新的、优雅的构造函数直接初始化 Messages")
     messages = Messages(
         SystemMessage(system_prompt_provider, tools_provider),
-        UserMessage(files_provider, StaticTextProvider("user_input", "这是我的初始问题。"))
+        UserMessage(files_provider, Texts("user_input", "这是我的初始问题。"))
     )
 
     print("\n--- 渲染后的初始 Messages (首次渲染，全部刷新) ---")
@@ -138,7 +138,7 @@ async def run_demo():
 
     # 直接通过 messages 对象穿透访问并更新 files provider
     files_provider_instance = messages.provider("files")
-    if isinstance(files_provider_instance, FileContentProvider):
+    if isinstance(files_provider_instance, Files):
         files_provider_instance.update("file1.py", "这是新的文件内容！")
 
     print("\n--- 再次渲染 Messages (只有文件提供者会刷新) ---")
