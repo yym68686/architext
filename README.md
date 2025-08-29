@@ -164,7 +164,7 @@ async def example_3():
 
     # b. Precisely locate the UserMessage by index (messages[1]) and insert it
     if popped_tools_provider:
-        messages[1].content.insert(0, popped_tools_provider)
+        messages[1].insert(0, popped_tools_provider)
 
     # 3. View the refactored result
     print("\n--- Final Layout After Refactoring ---")

@@ -43,10 +43,12 @@ class Files(ContextProvider):
         if not self._files: return None
         return "<files>\n" + "\n".join([f"<file path='{p}'>{c[:50]}...</file>" for p, c in self._files.items()]) + "\n</files>"
 
-# 3. 消息内容类与消息类
-class MessageContent:
-    def __init__(self, items: List[ContextProvider]): self._items: List[ContextProvider] = items
-    async def render(self) -> str:
+# 3. 消息类 (已合并 MessageContent)
+class Message(ABC):
+    def __init__(self, role: str, *initial_items: ContextProvider):
+        self.role = role
+        self._items: List[ContextProvider] = list(initial_items)
+    async def _render_content(self) -> str:
         tasks = [item.render() for item in self._items]
         blocks = await asyncio.gather(*tasks)
         return "\n\n".join(b.content for b in blocks if b and b.content)
@@ -57,12 +59,9 @@ class MessageContent:
     def insert(self, index: int, item: ContextProvider): self._items.insert(index, item)
     def append(self, item: ContextProvider): self._items.append(item)
     def providers(self) -> List[ContextProvider]: return self._items
-    def __repr__(self): return f"Content(items={[item.name for item in self._items if hasattr(item, 'name')]})"
-
-class Message(ABC):
-    def __init__(self, role: str, *initial_items: ContextProvider): self.role = role; self.content = MessageContent(list(initial_items))
+    def __repr__(self): return f"Message(role='{self.role}', items={[i.name for i in self._items]})"
     async def to_dict(self) -> Optional[Dict[str, Any]]:
-        rendered_content = await self.content.render()
+        rendered_content = await self._render_content()
         if not rendered_content: return None
         return {"role": self.role, "content": rendered_content}
 
@@ -81,12 +80,12 @@ class Messages:
     def __init__(self, *initial_messages: Message):
         self._messages: List[Message] = list(initial_messages)
         all_providers = []
-        for msg in self._messages: all_providers.extend(msg.content.providers())
+        for msg in self._messages: all_providers.extend(msg.providers())
         self._context_builder = ContextBuilder(all_providers)
     def provider(self, name: str) -> Optional[ContextProvider]: return self._context_builder.get_provider(name)
     def pop(self, name: str) -> Optional[ContextProvider]:
         for message in self._messages:
-            popped_item = message.content.pop(name)
+            popped_item = message.pop(name)
             if popped_item: return popped_item
         return None
     async def render(self) -> List[Dict[str, Any]]:
@@ -95,7 +94,7 @@ class Messages:
         return [res for res in results if res]
     def append(self, message: Message):
         self._messages.append(message)
-        for p in message.content.providers():
+        for p in message.providers():
             if p.name not in self._context_builder.providers: self._context_builder.providers[p.name] = p
     def __getitem__(self, index: int) -> Message: return self._messages[index]
     def __len__(self) -> int: return len(self._messages)
@@ -143,7 +142,7 @@ async def run_demo():
     # b. 将弹出的 Provider 插入到第一个 UserMessage (索引为1) 的开头
     if popped_tools_provider:
         # 通过索引精确定位
-        messages[1].content.insert(0, popped_tools_provider)
+        messages[1].insert(0, popped_tools_provider)
         print(f"\n已成功将 '{popped_tools_provider.name}' 提供者移动到用户消息。")
 
     print("\n--- Pop 和 Insert 后渲染的 Messages (验证移动效果) ---")

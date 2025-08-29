@@ -77,7 +77,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any("<tools>" in msg['content'] for msg in rendered_after_pop if msg['role'] == 'system'))
 
         # 通过索引将弹出的provider插入到UserMessage的开头
-        messages[1].content.insert(0, popped_tools_provider)
+        messages[1].insert(0, popped_tools_provider)
 
         # 验证 insert 后的状态
         rendered_after_insert = await messages.render()

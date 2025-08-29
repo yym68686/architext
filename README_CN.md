@@ -164,7 +164,7 @@ async def example_3():
 
     # b. 通过索引精确定位到 UserMessage (messages[1])，并插入它
     if popped_tools_provider:
-        messages[1].content.insert(0, popped_tools_provider)
+        messages[1].insert(0, popped_tools_provider)
 
     # 3. 查看重构后的结果
     print("\n--- 重构后的最终布局 ---")
