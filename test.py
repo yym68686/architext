@@ -21,7 +21,8 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(len(messages), 2)
-        rendered = await messages.render()
+        await messages.refresh()
+        rendered = messages.render()
 
         self.assertEqual(len(rendered), 2)
         self.assertIn("<tools>", rendered[0]['content'])
@@ -29,29 +30,30 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
     async def test_b_provider_passthrough_and_refresh(self):
         """测试通过 mock 验证缓存和刷新逻辑"""
-        # 为 files_provider 的 _fetch_content 方法创建一个 mock
-        # 我们希望它在被调用时仍然返回真实的结果，所以使用 side_effect
-        original_fetch = self.files_provider._fetch_content
-        self.files_provider._fetch_content = AsyncMock(side_effect=original_fetch)
+        # 我们真正关心的是 _fetch_content 是否被不必要地调用
+        # 所以我们 mock 底层的它，而不是 refresh 方法
+        original_fetch_content = self.files_provider._fetch_content
+        self.files_provider._fetch_content = AsyncMock(side_effect=original_fetch_content)
 
         messages = Messages(UserMessage(self.files_provider))
 
-        # 1. 初始文件内容为空，渲染一次
+        # 1. 首次刷新
         self.files_provider.update("path1", "content1")
-        await messages.render()
+        await messages.refresh()
         # _fetch_content 应该被调用了 1 次
         self.assertEqual(self.files_provider._fetch_content.call_count, 1)
 
-        # 2. 再次渲染，内容未变，不应再次调用 _fetch_content
-        await messages.render()
+        # 2. 再次刷新，内容未变，不应再次调用 _fetch_content
+        await messages.refresh()
         # 调用次数应该仍然是 1，证明缓存生效
         self.assertEqual(self.files_provider._fetch_content.call_count, 1)
 
         # 3. 更新文件内容，这会标记 provider 为 stale
         self.files_provider.update("path2", "content2")
 
-        # 4. 再次渲染，现在应该会重新调用 _fetch_content
-        rendered = await messages.render()
+        # 4. 再次刷新，现在应该会重新调用 _fetch_content
+        await messages.refresh()
+        rendered = messages.render()
         # 调用次数应该变为 2
         self.assertEqual(self.files_provider._fetch_content.call_count, 2)
         # 并且渲染结果包含了新内容
@@ -65,7 +67,8 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         )
 
         # 验证初始状态
-        initial_rendered = await messages.render()
+        await messages.refresh()
+        initial_rendered = messages.render()
         self.assertTrue(any("<tools>" in msg['content'] for msg in initial_rendered if msg['role'] == 'system'))
 
         # 全局弹出 'tools' Provider
@@ -73,14 +76,14 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         self.assertIs(popped_tools_provider, self.tools_provider)
 
         # 验证 pop 后的状态
-        rendered_after_pop = await messages.render()
+        rendered_after_pop = messages.render()
         self.assertFalse(any("<tools>" in msg['content'] for msg in rendered_after_pop if msg['role'] == 'system'))
 
         # 通过索引将弹出的provider插入到UserMessage的开头
         messages[1].insert(0, popped_tools_provider)
 
         # 验证 insert 后的状态
-        rendered_after_insert = await messages.render()
+        rendered_after_insert = messages.render()
         user_message_content = next(msg['content'] for msg in rendered_after_insert if msg['role'] == 'user')
         self.assertTrue(user_message_content.startswith("<tools>"))
 
