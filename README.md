@@ -1,4 +1,7 @@
+
 # Architext
+
+[English](./README.md) | [中文](./README_CN.md)
 
 [![PyPI version](https://badge.fury.io/py/architext.svg)](https://badge.fury.io/py/architext)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -8,186 +11,186 @@
 
 ---
 
-**Architext** (源自 "Architecture" + "Text") 是一个为大语言模型（LLM）应用设计的、专注于**上下文工程 (Context Engineering)** 的 Python 库。它提供了一套优雅、强大且面向对象的工具，让您能够像软件工程师设计架构一样，精确、动态地构建和重组 LLM 的输入上下文。
+**Architext** (from "Architecture" + "Text") is a Python library designed for Large Language Model (LLM) applications, focusing on **Context Engineering**. It provides an elegant, powerful, and object-oriented set of tools that allow you to precisely and dynamically construct and reorganize the input context for LLMs, much like a software engineer designs an architecture.
 
-告别散乱的字符串拼接和复杂的构建逻辑，进入一个将上下文视为**可操作、可组合、可演进的工程化实体**的新时代。
+Say goodbye to scattered string concatenation and complex construction logic, and enter a new era where context is treated as an **operable, composable, and evolvable engineered entity**.
 
-## 🤔 什么是上下文工程 (Context Engineering)？
+## 🤔 What is Context Engineering?
 
-在构建复杂的 AI Agent 时，提供给 LLM 的上下文（即 `messages` 列表）的**质量和结构**直接决定了其性能的上限。上下文工程是一门新兴的学科，它关注于：
+When building complex AI Agents, the **quality and structure** of the context provided to the LLM (i.e., the `messages` list) directly determine its performance ceiling. Context Engineering is an emerging discipline that focuses on:
 
-*   **结构化（Structuring）**: 如何将来自不同数据源（文件、代码、数据库、API）的信息，组织成 LLM 最易于理解的结构？
-*   **动态化（Dynamism）**: 如何根据对话的进展，实时地添加、移除或重排上下文内容，以保持其相关性和时效性？
-*   **优化（Optimization）**: 如何在有限的上下文窗口内，智能地筛选和呈现最高价值的信息，以最大化性能并最小化成本？
+*   **Structuring**: How to organize information from various data sources (files, code, databases, APIs) into a structure that LLMs can most easily understand?
+*   **Dynamism**: How to dynamically add, remove, or rearrange context content as the conversation progresses to maintain its relevance and timeliness?
+*   **Optimization**: How to intelligently filter and present the most valuable information within a limited context window to maximize performance and minimize cost?
 
-`Architext` 正是为解决这些工程化挑战而生。
+`Architext` is designed to solve these engineering challenges.
 
-## ✨ Architext: 为上下文工程而生
+## ✨ Architext: Born for Context Engineering
 
-`Architext` 的核心理念是将上下文的构建过程从临时的“手工艺”提升为系统化的“工程学”。
+The core philosophy of `Architext` is to elevate the context construction process from ad-hoc "craftsmanship" to systematic "engineering."
 
-*   **将上下文模块化 (Modularize Context)**: 每个信息源（如文件内容、工具列表）都是一个独立的 `ContextProvider`，负责生产标准化的 `ContentBlock`。
-*   **视消息为可变结构 (Messages as Mutable Structures)**: 消息不再是静态的文本，而是一个可被实时操作的对象容器。您可以像操作精密组件一样，对其内部的内容块进行精确的 `pop`, `insert`, `append`。
-*   **以架构师的思维构建提示 (Think like an Architect)**: 您可以像设计软件架构一样，清晰地布局 `SystemMessage` 和 `UserMessage` 的结构，并通过统一的接口动态调整，以应对不同的任务场景。
+*   **Modularize Context**: Each information source (e.g., file content, tool lists) is an independent `ContextProvider` responsible for producing standardized `ContentBlock`s.
+*   **Messages as Mutable Structures**: Messages are no longer static text but a container of objects that can be manipulated in real-time. You can perform precise `pop`, `insert`, and `append` operations on its internal content blocks as if they were precision components.
+*   **Think like an Architect**: You can lay out the structure of `SystemMessage` and `UserMessage` as clearly as designing a software architecture, and dynamically adjust it through a unified interface to handle different task scenarios.
 
-## 🚀 核心特性 (Features)
+## 🚀 Core Features
 
-*   **面向对象的上下文建模**: 将 `SystemMessage`, `UserMessage` 等视为可操作的一等公民。
-*   **原子化的内容块 (`ContentBlock`)**: 将上下文分解为可独立操作和移动的最小单元。
-*   **列表式动态操作**: 通过 `pop()`, `insert()` 等方法，实现对上下文内容的实时、精确控制。
-*   **提供者驱动架构**: 通过可扩展的 `ContextProvider` 体系，轻松接入任何数据源。
-*   **智能缓存与按需刷新**: 内置高效的缓存机制，仅在数据源变化时才刷新，显著提升性能。
-*   **统一的穿透式接口**: 通过顶层 `Messages` 对象，直接访问和控制任何底层的 `ContextProvider`，实现状态的集中管理。
+*   **Object-Oriented Context Modeling**: Treat `SystemMessage`, `UserMessage`, etc., as first-class, operable citizens.
+*   **Atomic Content Blocks (`ContentBlock`)**: Decompose context into the smallest units that can be independently manipulated and moved.
+*   **List-like Dynamic Operations**: Achieve real-time, precise control over context content using methods like `pop()` and `insert()`.
+*   **Provider-Driven Architecture**: Easily connect to any data source through an extensible `ContextProvider` system.
+*   **Intelligent Caching and On-Demand Refresh**: Built-in efficient caching mechanism that only refreshes when the data source changes, significantly improving performance.
+*   **Unified Pass-Through Interface**: Directly access and control any underlying `ContextProvider` through the top-level `Messages` object for centralized state management.
 
-## 📦 安装 (Installation)
+## 📦 Installation
 
 ```bash
 pip install architext
 ```
 
-## 🚀 快速上手：一次上下文工程实践
+## 🚀 Quick Start: A Context Engineering Practice
 
-`Architext` 的核心在于其直观、灵活的 API。下面通过一系列独立的示例，展示如何利用它进行高效的上下文工程。
+The core of `Architext` lies in its intuitive and flexible API. The following series of independent examples demonstrate how to use it for efficient context engineering.
 
-### 示例 1: 基础布局与首次渲染
+### Example 1: Basic Layout and Initial Rendering
 
-这是最基础的用法。我们声明式地构建一个包含 `System` 和 `User` 消息的对话结构。
+This is the most basic usage. We declaratively build a conversation structure containing `System` and `User` messages.
 
 ```python
-# --- 示例 1: 基础布局 ---
+# --- Example 1: Basic Layout ---
 import asyncio
 from architext import Messages, SystemMessage, UserMessage, Texts, Tools
 
 async def example_1():
-    # 1. 定义你的上下文提供者
+    # 1. Define your context providers
     tools_provider = Tools(tools_json=[{"name": "run_test"}])
-    system_prompt = Texts("system_prompt", "你是一个专业的AI代码审查员。")
+    system_prompt = Texts("system_prompt", "You are a professional AI code reviewer.")
 
-    # 2. 声明式地构建消息列表
+    # 2. Declaratively build the message list
     messages = Messages(
         SystemMessage(system_prompt, tools_provider),
-        UserMessage(Texts("user_input", "请帮我审查以下Python代码。"))
+        UserMessage(Texts("user_input", "Please help me review the following Python code."))
     )
 
-    # 3. 渲染最终的 messages 列表
-    print("--- 示例 1: 渲染结果 ---")
+    # 3. Render the final messages list
+    print("--- Example 1: Render Result ---")
     for msg in await messages.render():
         print(msg)
 
 asyncio.run(example_1())
 ```
 
-**预期输出:**
+**Expected Output:**
 ```
---- 示例 1: 渲染结果 ---
-{'role': 'system', 'content': '你是一个专业的AI代码审查员。\n\n<tools>[{\'name\': \'run_test\'}]</tools>'}
-{'role': 'user', 'content': '请帮我审查以下Python代码。'}
+--- Example 1: Render Result ---
+{'role': 'system', 'content': 'You are a professional AI code reviewer.\n\n<tools>[{\'name\': \'run_test\'}]</tools>'}
+{'role': 'user', 'content': 'Please help me review the following Python code.'}
 ```
 
 ---
 
-### 示例 2: 穿透更新与自动刷新
+### Example 2: Pass-Through Updates and Automatic Refresh
 
-`Architext` 的强大之处在于您可以随时更新底层的上下文源，而系统会在下次渲染时自动、高效地刷新内容。
+The power of `Architext` is that you can update the underlying context sources at any time, and the system will automatically and efficiently refresh the content on the next render.
 
 ```python
-# --- 示例 2: 穿透更新 ---
+# --- Example 2: Pass-Through Update ---
 import asyncio
 from architext import Messages, UserMessage, Files
 
 async def example_2():
-    # 1. 初始化一个包含文件提供者的消息
+    # 1. Initialize a message with a files provider
     files_provider = Files()
     messages = Messages(
         UserMessage(files_provider)
     )
 
-    # 2. 此刻文件内容为空，渲染结果为空列表
-    print("--- 初始状态 (文件内容为空) ---")
+    # 2. At this moment, the file content is empty, so the render result is an empty list
+    print("--- Initial State (File content is empty) ---")
     print(await messages.render())
 
-    # 3. 通过穿透接口更新文件内容
-    # 这会自动将 files_provider 标记为“过期”
-    print("\n>>> 通过 messages.provider 更新文件...")
+    # 3. Update the file content via the pass-through interface
+    # This automatically marks the files_provider as "dirty"
+    print("\n>>> Updating files via messages.provider...")
     file_instance = messages.provider("files")
     if file_instance:
         file_instance.update("main.py", "def main():\n    pass")
 
-    # 4. 再次渲染，Architext 会自动刷新已过期的 provider
-    print("\n--- 更新后再次渲染 ---")
+    # 4. Render again, Architext will automatically refresh the dirty provider
+    print("\n--- Render After Update ---")
     for msg in await messages.render():
         print(msg)
 
 asyncio.run(example_2())
 ```
 
-**预期输出:**
+**Expected Output:**
 ```
---- 初始状态 (文件内容为空) ---
+--- Initial State (File content is empty) ---
 []
 
->>> 通过 messages.provider 更新文件...
+>>> Updating files via messages.provider...
 
---- 更新后再次渲染 ---
+--- Render After Update ---
 {'role': 'user', 'content': "<files>\n<file path='main.py'>def main():\n    pass...</file>\n</files>"}
 ```
 
 ---
 
-### 示例 3: 动态重构上下文 (`pop` 和 `insert`)
+### Example 3: Dynamic Context Refactoring (`pop` and `insert`)
 
-这是**上下文工程**的核心实践。您可以像操作列表一样，动态地将一个内容块从一条消息移动到另一条消息，以适应不同的任务需求。
+This is the core practice of **Context Engineering**. You can dynamically move a content block from one message to another, just like manipulating a list, to adapt to different task requirements.
 
 ```python
-# --- 示例 3: 动态重构 ---
+# --- Example 3: Dynamic Refactoring ---
 import asyncio
 from architext import Messages, SystemMessage, UserMessage, Texts, Tools
 
 async def example_3():
-    # 1. 初始布局：工具在 SystemMessage 中
+    # 1. Initial layout: tools are in SystemMessage
     tools_provider = Tools(tools_json=[{"name": "run_test"}])
     messages = Messages(
         SystemMessage(tools_provider),
-        UserMessage(Texts("user_input", "分析代码并运行测试。"))
+        UserMessage(Texts("user_input", "Analyze the code and run the tests."))
     )
-    print("--- 初始布局 ---")
+    print("--- Initial Layout ---")
     for msg in await messages.render(): print(msg)
 
-    # 2. 运行时决策：为了更强的指令性，将工具上下文移动到用户消息中
-    print("\n>>> 重构上下文：将 'tools' 块移动到 UserMessage...")
+    # 2. Runtime decision: Move the tools context to the user message for stronger instruction
+    print("\n>>> Refactoring context: Moving 'tools' block to UserMessage...")
 
-    # a. 从任何消息中全局弹出 'tools' 提供者
+    # a. Globally pop the 'tools' provider from any message
     popped_tools_provider = messages.pop("tools")
 
-    # b. 通过索引精确定位到 UserMessage (messages[1])，并插入它
+    # b. Precisely locate the UserMessage by index (messages[1]) and insert it
     if popped_tools_provider:
         messages[1].content.insert(0, popped_tools_provider)
 
-    # 3. 查看重构后的结果
-    print("\n--- 重构后的最终布局 ---")
+    # 3. View the refactored result
+    print("\n--- Final Layout After Refactoring ---")
     for msg in await messages.render(): print(msg)
 
 asyncio.run(example_3())
 ```
 
-**预期输出:**
+**Expected Output:**
 ```
---- 初始布局 ---
+--- Initial Layout ---
 {'role': 'system', 'content': "<tools>[{'name': 'run_test'}]</tools>"}
-{'role': 'user', 'content': '分析代码并运行测试。'}
+{'role': 'user', 'content': 'Analyze the code and run the tests.'}
 
->>> 重构上下文：将 'tools' 块移动到 UserMessage...
+>>> Refactoring context: Moving 'tools' block to UserMessage...
 
---- 重构后的最终布局 ---
+--- Final Layout After Refactoring ---
 {'role': 'system', 'content': ''}
-{'role': 'user', 'content': "<tools>[{'name': 'run_test'}]</tools>\n\n分析代码并运行测试。"}
+{'role': 'user', 'content': "<tools>[{'name': 'run_test'}]</tools>\n\nAnalyze the code and run the tests."}
 ```
-*(注意: SystemMessage 的内容变为空，因为它唯一的块被移走了，所以在最终渲染时可能会被过滤掉)*
+*(Note: The content of SystemMessage becomes empty because its only block was moved, so it might be filtered out in the final rendering)*
 
-## 🤝 贡献 (Contributing)
+## 🤝 Contributing
 
-上下文工程是一个激动人心的新领域。我们欢迎任何形式的贡献，共同探索构建更智能、更高效的 AI Agent。无论是报告 Bug、提出新功能，还是提交代码，您的参与都至关重要。
+Context Engineering is an exciting new field. We welcome contributions of all forms to jointly explore building smarter, more efficient AI Agents. Whether it's reporting a bug, proposing a new feature, or submitting code, your participation is crucial.
 
-## 📄 许可证 (License)
+## 📄 License
 
-本项目采用 MIT 许可证。详情请参阅 `LICENSE` 文件。
+This project is licensed under the MIT License. See the `LICENSE` file for details.
