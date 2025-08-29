@@ -179,6 +179,44 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(messages), 4) # Should not merge
         self.assertEqual(messages[3].role, "system")
 
+    async def test_g_state_inconsistency_on_direct_message_modification(self):
+        """
+        测试当直接在 Message 对象上执行 pop 操作时，
+        顶层 Messages 对象的 _providers_index 是否会产生不一致。
+        """
+        messages = Messages(
+            SystemMessage(self.system_prompt_provider, self.tools_provider),
+            UserMessage(self.files_provider)
+        )
+
+        # 0. 先刷新一次，确保所有 provider 的 cache 都已填充
+        await messages.refresh()
+
+        # 1. 初始状态：'tools' 提供者应该在索引中
+        self.assertIsNotNone(messages.provider("tools"), "初始状态下 'tools' 提供者应该能被找到")
+        self.assertIs(messages.provider("tools"), self.tools_provider)
+
+        # 2. 直接在子消息对象上执行 pop 操作
+        system_message = messages[0]
+        popped_provider = system_message.pop("tools")
+
+        # 验证是否真的从 Message 对象中弹出了
+        self.assertIs(popped_provider, self.tools_provider, "应该从 SystemMessage 中成功弹出 provider")
+        self.assertNotIn(self.tools_provider, system_message.providers(), "provider 不应再存在于 SystemMessage 的 providers 列表中")
+
+        # 3. 核心问题：检查顶层 Messages 的索引
+        # 在理想情况下，直接修改子消息应该同步更新顶层索引。
+        # 因此，我们断言 provider 现在应该是找不到的。这个测试现在应该会失败。
+        provider_after_pop = messages.provider("tools")
+        self.assertIsNone(provider_after_pop, "BUG: 直接从子消息中 pop 后，顶层索引未同步，仍然可以找到 provider")
+
+        # 4. 进一步验证：渲染结果和索引内容不一致
+        # 渲染结果应该不再包含 tools 内容，因为 Message 对象本身是正确的
+        rendered_messages = messages.render()
+        self.assertGreater(len(rendered_messages), 0, "渲染后的消息列表不应为空")
+        rendered_content = rendered_messages[0]['content']
+        self.assertNotIn("<tools>", rendered_content, "渲染结果中不应再包含 'tools' 的内容，证明数据源已更新")
+
 
 if __name__ == '__main__':
     # 为了在普通脚本环境中运行，添加这两行

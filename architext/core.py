@@ -18,12 +18,8 @@ class ContextProvider(ABC):
     def mark_stale(self): self._is_stale = True
     async def refresh(self):
         if self._is_stale:
-            # 注意：我们将在这个方法上使用 mock，所以实际的 print 不再重要
-            # print(f"信息: 正在为上下文提供者 '{self.name}' 刷新内容...")
             self._cached_content = await self._fetch_content()
             self._is_stale = False
-        # else:
-            # print(f"调试: 上下文提供者 '{self.name}' 正在使用缓存内容。")
     @abstractmethod
     async def _fetch_content(self) -> Optional[str]: raise NotImplementedError
     def get_content_block(self) -> Optional[ContentBlock]:
@@ -64,42 +60,50 @@ class Message(ABC):
     def __init__(self, role: str, *initial_items: ContextProvider):
         self.role = role
         self._items: List[ContextProvider] = list(initial_items)
+        self._parent_messages: Optional['Messages'] = None
+
     def _render_content(self) -> str:
         blocks = [item.get_content_block() for item in self._items]
         return "\n\n".join(b.content for b in blocks if b and b.content)
+
     def pop(self, name: str) -> Optional[ContextProvider]:
+        popped_item = None
         for i, item in enumerate(self._items):
-            if hasattr(item, 'name') and item.name == name: return self._items.pop(i)
-        return None
-    def insert(self, index: int, item: ContextProvider): self._items.insert(index, item)
-    def append(self, item: ContextProvider): self._items.append(item)
+            if hasattr(item, 'name') and item.name == name:
+                popped_item = self._items.pop(i)
+                break
+        if popped_item and self._parent_messages:
+            self._parent_messages._notify_provider_removed(popped_item)
+        return popped_item
+
+    def insert(self, index: int, item: ContextProvider):
+        self._items.insert(index, item)
+        if self._parent_messages:
+            self._parent_messages._notify_provider_added(item, self)
+
+    def append(self, item: ContextProvider):
+        self._items.append(item)
+        if self._parent_messages:
+            self._parent_messages._notify_provider_added(item, self)
+
     def providers(self) -> List[ContextProvider]: return self._items
     def __repr__(self): return f"Message(role='{self.role}', items={[i.name for i in self._items]})"
     def to_dict(self) -> Optional[Dict[str, Any]]:
         is_multimodal = any(isinstance(p, Images) for p in self._items)
 
         if not is_multimodal:
-            # Original string-based rendering
             rendered_content = self._render_content()
             if not rendered_content: return None
             return {"role": self.role, "content": rendered_content}
         else:
-            # New list-based rendering for multimodal content
             content_list = []
             for item in self._items:
                 block = item.get_content_block()
                 if not block or not block.content: continue
-
                 if isinstance(item, Images):
-                    content_list.append({
-                        "type": "image_url",
-                        "image_url": {"url": block.content}
-                    })
-                else: # Treat all others as text
-                    content_list.append({
-                        "type": "text",
-                        "text": block.content
-                    })
+                    content_list.append({"type": "image_url", "image_url": {"url": block.content}})
+                else:
+                    content_list.append({"type": "text", "text": block.content})
             if not content_list: return None
             return {"role": self.role, "content": content_list}
 
@@ -114,13 +118,17 @@ class Messages:
         from typing import Tuple
         self._messages: List[Message] = []
         self._providers_index: Dict[str, Tuple[ContextProvider, Message]] = {}
+        if initial_messages:
+            for msg in initial_messages:
+                self.append(msg)
 
-        if not initial_messages:
-            return
+    def _notify_provider_added(self, provider: ContextProvider, message: Message):
+        if provider.name not in self._providers_index:
+            self._providers_index[provider.name] = (provider, message)
 
-        # Process messages to merge consecutive ones with the same role
-        for msg in initial_messages:
-            self.append(msg)
+    def _notify_provider_removed(self, provider: ContextProvider):
+        if provider.name in self._providers_index:
+            del self._providers_index[provider.name]
 
     def provider(self, name: str) -> Optional[ContextProvider]:
         indexed = self._providers_index.get(name)
@@ -130,13 +138,8 @@ class Messages:
         indexed = self._providers_index.get(name)
         if not indexed:
             return None
-
         _provider, parent_message = indexed
-        # Pop from the parent message and the index
-        popped_item = parent_message.pop(name)
-        if popped_item:
-            del self._providers_index[name]
-        return popped_item
+        return parent_message.pop(name)
 
     async def refresh(self):
         tasks = [provider.refresh() for provider, _ in self._providers_index.values()]
@@ -147,29 +150,23 @@ class Messages:
         return [res for res in results if res]
 
     async def render_latest(self) -> List[Dict[str, Any]]:
-        """A convenience method that refreshes all providers and then renders."""
         await self.refresh()
         return self.render()
 
     def append(self, message: Message):
-        # Merge with the last message if roles are the same
         if self._messages and self._messages[-1].role == message.role:
             last_message = self._messages[-1]
-            last_message._items.extend(message._items)
-            parent_message_for_index = last_message
+            for provider in message.providers():
+                last_message.append(provider)
         else:
+            message._parent_messages = self
             self._messages.append(message)
-            parent_message_for_index = message
-
-        # Update provider index for the new items
-        for p in message.providers():
-            if p.name not in self._providers_index:
-                self._providers_index[p.name] = (p, parent_message_for_index)
+            for p in message.providers():
+                self._notify_provider_added(p, message)
 
     def __getitem__(self, index: int) -> Message: return self._messages[index]
     def __len__(self) -> int: return len(self._messages)
     def __iter__(self): return iter(self._messages)
-
 
 # ==============================================================================
 # 6. 演示
@@ -194,8 +191,6 @@ async def run_demo():
 
     # --- 3. 演示穿透更新 ---
     print("\n>>> 场景 B: 穿透更新 File Provider，渲染时自动刷新")
-
-    # 直接通过 messages 对象穿透访问并更新 files provider
     files_provider_instance = messages.provider("files")
     if isinstance(files_provider_instance, Files):
         files_provider_instance.update("file1.py", "这是新的文件内容！")
@@ -206,36 +201,28 @@ async def run_demo():
 
     # --- 4. 演示全局 Pop 和通过索引 Insert ---
     print("\n>>> 场景 C: 全局 Pop 工具提供者，并 Insert 到 UserMessage 中")
-
-    # a. 全局弹出 'tools' Provider
     popped_tools_provider = messages.pop("tools")
-
-    # b. 将弹出的 Provider 插入到第一个 UserMessage (索引为1) 的开头
     if popped_tools_provider:
-        # 通过索引精确定位
         messages[1].insert(0, popped_tools_provider)
         print(f"\n已成功将 '{popped_tools_provider.name}' 提供者移动到用户消息。")
 
     print("\n--- Pop 和 Insert 后渲染的 Messages (验证移动效果) ---")
-    # No refresh needed here as no content has changed, just moved
     for msg_dict in messages.render(): print(msg_dict)
     print("-" * 40)
 
     # --- 5. 演示多模态渲染 ---
     print("\n>>> 场景 D: 演示多模态 (文本+图片) 渲染")
-    # Create a dummy image file for demo purposes
     with open("dummy_image.png", "w") as f:
         f.write("This is a dummy image file.")
 
     multimodal_message = Messages(
         UserMessage(
             Texts("prompt", "What do you see in this image?"),
-            Images("dummy_image.png") # Name is now optional
+            Images("dummy_image.png")
         )
     )
     print("\n--- 渲染后的多模态 Message ---")
     for msg_dict in await multimodal_message.render_latest():
-        # Print only a snippet of the base64 content for brevity
         if isinstance(msg_dict['content'], list):
             for item in msg_dict['content']:
                 if item['type'] == 'image_url':
