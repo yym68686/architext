@@ -152,6 +152,33 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         import os
         os.remove(dummy_image_path)
 
+    def test_f_message_merging(self):
+        """测试初始化和追加时自动合并消息的功能"""
+        # 1. Test merging during initialization
+        messages = Messages(
+            UserMessage(Texts("part1", "Hello,")),
+            UserMessage(Texts("part2", "world!")),
+            SystemMessage(Texts("system", "System prompt.")),
+            UserMessage(Texts("part3", "How are you?"))
+        )
+        # Should be merged into: User, System, User
+        self.assertEqual(len(messages), 3)
+        self.assertEqual(len(messages[0]._items), 2) # First UserMessage has 2 items
+        self.assertEqual(messages[0]._items[1].name, "part2")
+        self.assertEqual(messages[1].role, "system")
+        self.assertEqual(messages[2].role, "user")
+
+        # 2. Test merging during append
+        messages.append(UserMessage(Texts("part4", "I am fine.")))
+        self.assertEqual(len(messages), 3) # Still 3 messages
+        self.assertEqual(len(messages[2]._items), 2) # Last UserMessage now has 2 items
+        self.assertEqual(messages[2]._items[1].name, "part4")
+
+        # 3. Test appending a different role
+        messages.append(SystemMessage(Texts("system2", "Another prompt.")))
+        self.assertEqual(len(messages), 4) # Should not merge
+        self.assertEqual(messages[3].role, "system")
+
 
 if __name__ == '__main__':
     # 为了在普通脚本环境中运行，添加这两行

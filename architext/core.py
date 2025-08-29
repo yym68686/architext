@@ -112,12 +112,15 @@ class UserMessage(Message):
 class Messages:
     def __init__(self, *initial_messages: Message):
         from typing import Tuple
-        self._messages: List[Message] = list(initial_messages)
+        self._messages: List[Message] = []
         self._providers_index: Dict[str, Tuple[ContextProvider, Message]] = {}
-        for msg in self._messages:
-            for p in msg.providers():
-                if p.name not in self._providers_index:
-                    self._providers_index[p.name] = (p, msg)
+
+        if not initial_messages:
+            return
+
+        # Process messages to merge consecutive ones with the same role
+        for msg in initial_messages:
+            self.append(msg)
 
     def provider(self, name: str) -> Optional[ContextProvider]:
         indexed = self._providers_index.get(name)
@@ -149,10 +152,20 @@ class Messages:
         return self.render()
 
     def append(self, message: Message):
-        self._messages.append(message)
+        # Merge with the last message if roles are the same
+        if self._messages and self._messages[-1].role == message.role:
+            last_message = self._messages[-1]
+            last_message._items.extend(message._items)
+            parent_message_for_index = last_message
+        else:
+            self._messages.append(message)
+            parent_message_for_index = message
+
+        # Update provider index for the new items
         for p in message.providers():
             if p.name not in self._providers_index:
-                self._providers_index[p.name] = (p, message)
+                self._providers_index[p.name] = (p, parent_message_for_index)
+
     def __getitem__(self, index: int) -> Message: return self._messages[index]
     def __len__(self) -> int: return len(self._messages)
     def __iter__(self): return iter(self._messages)
@@ -171,7 +184,8 @@ async def run_demo():
     print("\n>>> 场景 A: 使用新的、优雅的构造函数直接初始化 Messages")
     messages = Messages(
         SystemMessage(system_prompt_provider, tools_provider),
-        UserMessage(files_provider, Texts("user_input", "这是我的初始问题。"))
+        UserMessage(files_provider, Texts("user_input", "这是我的初始问题。")),
+        UserMessage(Texts("user_input2", "这是我的初始问题2。"))
     )
 
     print("\n--- 渲染后的初始 Messages (首次渲染，全部刷新) ---")
