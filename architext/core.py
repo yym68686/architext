@@ -63,8 +63,11 @@ class Texts(ContextProvider):
 
     async def render(self) -> Optional[str]:
         if self._is_dynamic:
-            return self._text()
-        return self._text
+            # Ensure dynamic content returns a string, even if empty
+            result = self._text()
+            return result if result is not None else ""
+        # Ensure static content returns a string, even if empty
+        return self._text if self._text is not None else ""
 
 class Tools(ContextProvider):
     def __init__(self, tools_json: List[Dict]): super().__init__("tools"); self._tools_json = tools_json
@@ -201,8 +204,37 @@ class Message(ABC):
         self._parent_messages: Optional['Messages'] = None
 
     def _render_content(self) -> str:
-        blocks = [item.get_content_block() for item in self._items]
-        return "\n\n".join(b.content for b in blocks if b and b.content)
+        # Get all blocks and their provider types first
+        blocks_with_types = []
+        for item in self._items:
+            block = item.get_content_block()
+            if block and (block.content or block.content == ""): # Consider blocks with empty string content
+                # We only care about non-multimodal Texts providers for concatenation
+                provider_type = Texts if type(item) is Texts else type(item)
+                blocks_with_types.append((block, provider_type))
+
+        if not blocks_with_types:
+            return ""
+
+        # Build the final content string
+        # Start with the first block's content
+        final_content_parts = [blocks_with_types[0][0].content]
+
+        for i in range(1, len(blocks_with_types)):
+            current_block, current_type = blocks_with_types[i]
+            _, prev_type = blocks_with_types[i-1]
+
+            # If both the previous and current rendered blocks are simple text, concatenate them.
+            # Otherwise, join with newlines.
+            if prev_type is Texts and current_type is Texts:
+                separator = ""
+            else:
+                separator = "\n\n"
+
+            final_content_parts.append(separator)
+            final_content_parts.append(current_block.content)
+
+        return "".join(final_content_parts)
 
     def pop(self, name: str) -> Optional[ContextProvider]:
         popped_item = None

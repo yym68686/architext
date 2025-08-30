@@ -143,11 +143,12 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         popped_image = messages.pop("image")
         self.assertIsNotNone(popped_image)
 
-        # 3. Render again, should fall back to string content
+        # 3. Render again, should fall back to string content and seamlessly join texts
         rendered_str = messages.render() # No refresh needed
         content_str = rendered_str[0]['content']
         self.assertIsInstance(content_str, str)
-        self.assertEqual(content_str, "Look at this:\n\nAny thoughts?")
+        # With the new render logic, adjacent texts are joined with ""
+        self.assertEqual(content_str, "Look at this:Any thoughts?")
 
         # Clean up
         import os
@@ -884,7 +885,11 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         # If there's no content, the message itself might not be rendered.
         # Let's assume an empty provider results in the message not rendering.
         await deferred_text_provider.refresh()
-        self.assertIsNone(deferred_text_provider.get_content_block())
+        # With the new logic, it should return a block with an empty string
+        content_block = deferred_text_provider.get_content_block()
+        self.assertIsNotNone(content_block)
+        self.assertEqual(content_block.content, "")
+
 
         rendered_initial = await messages.render_latest()
         self.assertEqual(len(rendered_initial), 0)
@@ -898,6 +903,63 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         rendered_updated = await messages.render_latest()
         self.assertEqual(len(rendered_updated), 1)
         self.assertEqual(rendered_updated[0]['content'], "This is the new content.")
+
+    async def test_z4_fstring_deferred_population(self):
+        """测试 f-string 内容是否可以延迟填充"""
+        # 1. 初始化一个带有 f-string 占位符的 UserMessage
+        # 注意：这里的 f-string 会立即求值，所以我们需要模拟一个假的 Texts 对象
+        # 让它看起来像是 f-string 的一部分。正确的用法是直接在 f-string 中创建 Texts 对象。
+        user_info_provider = Texts(name="user_info")
+
+        # This is how the user wants to use it. The f-string is evaluated immediately.
+        # The Texts object inside it is created but has no text yet.
+        raw_fstring_text = f"""
+<user_info>
+The user's OS version is {Texts(name="os_version")}. The absolute path of the user's workspace is {Texts(name="workspace_path")} which is also the project root directory. The user's shell is {Texts(name="shell")}.
+</user_info>
+"""
+        # The above f-string evaluates to a string containing reprs of Texts objects.
+        # This is not how the library is designed to work.
+        # A more correct approach is to build the message programmatically.
+
+        # Let's test the intended-like usage pattern.
+        # We create a template and providers separately.
+
+        os_provider = Texts(name="os_version")
+        path_provider = Texts(name="workspace_path")
+        shell_provider = Texts(name="shell")
+
+        messages = Messages(
+            UserMessage(
+                "<user_info>\n"
+                "The user's OS version is ", os_provider, ". The absolute path of the user's workspace is ",
+                path_provider, " which is also the project root directory. The user's shell is ", shell_provider, ".\n"
+                "</user_info>"
+            )
+        )
+
+        # 2. 初始渲染，此时 placeholders 应该为空字符串
+        rendered_initial = await messages.render_latest()
+        expected_initial_content = (
+            "<user_info>\n"
+            "The user's OS version is . The absolute path of the user's workspace is "
+            " which is also the project root directory. The user's shell is .\n"
+            "</user_info>"
+        )
+        self.assertEqual(rendered_initial[0]['content'], expected_initial_content)
+
+        # 3. 获取 providers 并更新它们的值
+        messages.provider("os_version").update("macOS 14.5")
+        messages.provider("workspace_path").update("/Users/yanyuming/Downloads/GitHub/architext")
+        messages.provider("shell").update("/bin/zsh")
+
+        # 4. 再次渲染，验证 placeholders 是否已填充
+        rendered_final = await messages.render_latest()
+        final_content = rendered_final[0]['content']
+
+        self.assertIn("The user's OS version is macOS 14.5.", final_content)
+        self.assertIn("The absolute path of the user's workspace is /Users/yanyuming/Downloads/GitHub/architext which is also the project root directory.", final_content)
+        self.assertIn("The user's shell is /bin/zsh.", final_content)
 
 
 # ==============================================================================
