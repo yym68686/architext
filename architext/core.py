@@ -78,52 +78,54 @@ class Files(ContextProvider):
                 except Exception as e:
                     logging.error(f"Error reading file {path} during initialization: {e}")
 
-    def reload(self, path: Optional[str] = None) -> bool:
+    async def refresh(self):
         """
-        Reloads file contents from disk.
-
-        If a path is provided, it reloads that specific file.
-        If no path is provided, it reloads all files currently tracked by the provider.
-
-        Args:
-            path (Optional[str]): The path to the file to reload. Defaults to None.
-
-        Returns:
-            bool: True if all requested reloads were successful, False otherwise.
+        Overrides the default refresh behavior. It synchronizes the content of
+        all tracked files with the file system. If a file is not found, its
+        content is updated to reflect the error.
         """
-        paths_to_reload = []
-        if path:
-            if path in self._files:
-                paths_to_reload.append(path)
-            else:
-                logging.warning(f"Path '{path}' not tracked by this Files provider. Cannot reload.")
-                return False
-        else:
-            paths_to_reload = list(self._files.keys())
-
-        if not paths_to_reload:
-            logging.info("No files to reload.")
-            return True
-
-        success = True
-        for p in paths_to_reload:
+        is_changed = False
+        for path in list(self._files.keys()):
             try:
-                with open(p, 'r', encoding='utf-8') as f:
-                    self._files[p] = f.read()
-                logging.info(f"Successfully reloaded file: {p}")
+                with open(path, 'r', encoding='utf-8') as f:
+                    new_content = f.read()
+                if self._files.get(path) != new_content:
+                    self._files[path] = new_content
+                    is_changed = True
             except FileNotFoundError:
-                logging.error(f"File not found during reload: {p}. Keeping stale content.")
-                success = False
+                error_msg = f"[Error: File not found at path '{path}']"
+                if self._files.get(path) != error_msg:
+                    self._files[path] = error_msg
+                    is_changed = True
             except Exception as e:
-                logging.error(f"Error reloading file {p}: {e}. Keeping stale content.")
-                success = False
+                error_msg = f"[Error: Could not read file at path '{path}': {e}]"
+                if self._files.get(path) != error_msg:
+                    self._files[path] = error_msg
+                    is_changed = True
 
-        if success:
+        if is_changed:
             self.mark_stale()
 
-        return success
+        await super().refresh()
 
-    def update(self, path: str, content: str): self._files[path] = content; self.mark_stale()
+    def update(self, path: str, content: Optional[str] = None):
+        """
+        Updates a single file. If content is provided, it updates the file in
+        memory. If content is None, it reads the file from disk.
+        """
+        if content is not None:
+            self._files[path] = content
+        else:
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    self._files[path] = f.read()
+            except FileNotFoundError:
+                logging.error(f"File not found for update: {path}.")
+                self._files[path] = f"[Error: File not found at path '{path}']"
+            except Exception as e:
+                logging.error(f"Error reading file for update {path}: {e}.")
+                self._files[path] = f"[Error: Could not read file at path '{path}': {e}]"
+        self.mark_stale()
     async def render(self) -> str:
         if not self._files: return None
         return "<latest_file_content>" + "\n".join([f"<file><file_path>{p}</file_path><file_content>{c}</file_content></file>" for p, c in self._files.items()]) + "\n</latest_file_content>"

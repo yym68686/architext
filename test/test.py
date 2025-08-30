@@ -37,34 +37,27 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
     async def test_b_provider_passthrough_and_refresh(self):
         """测试通过 mock 验证缓存和刷新逻辑"""
-        # 我们真正关心的是 render 是否被不必要地调用
-        # 所以我们 mock 底层的它，而不是 refresh 方法
-        original_render = self.files_provider.render
-        self.files_provider.render = AsyncMock(side_effect=original_render)
-
-        messages = Messages(UserMessage(self.files_provider))
+        # 使用一个简单的 Texts provider 来测试通用缓存逻辑，避免 Files 的副作用
+        text_provider = Texts("initial text")
+        text_provider.render = AsyncMock(wraps=text_provider.render)
+        messages = Messages(UserMessage(text_provider))
 
         # 1. 首次刷新
-        self.files_provider.update("path1", "content1")
         await messages.refresh()
-        # render 应该被调用了 1 次
-        self.assertEqual(self.files_provider.render.call_count, 1)
+        self.assertEqual(text_provider.render.call_count, 1)
 
         # 2. 再次刷新，内容未变，不应再次调用 render
         await messages.refresh()
-        # 调用次数应该仍然是 1，证明缓存生效
-        self.assertEqual(self.files_provider.render.call_count, 1)
+        self.assertEqual(text_provider.render.call_count, 1)
 
-        # 3. 更新文件内容，这会标记 provider 为 stale
-        self.files_provider.update("path2", "content2")
+        # 3. 更新内容，这会标记 provider 为 stale
+        text_provider.update("updated text")
 
         # 4. 再次刷新，现在应该会重新调用 render
         await messages.refresh()
         rendered = messages.render()
-        # 调用次数应该变为 2
-        self.assertEqual(self.files_provider.render.call_count, 2)
-        # 并且渲染结果包含了新内容
-        self.assertIn("content2", rendered[0]['content'])
+        self.assertEqual(text_provider.render.call_count, 2)
+        self.assertIn("updated text", rendered[0]['content'])
 
     async def test_c_global_pop_and_indexed_insert(self):
         """测试全局pop和通过索引insert的功能"""
@@ -750,67 +743,81 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
             os.remove(test_file_3)
             os.remove(test_file_4)
 
-    async def test_x_files_provider_reload(self):
-        """测试 Files provider 的 reload 方法（带参数和不带参数）"""
-        # --- Part 1: Test reload with a specific path ---
-        test_file_1 = "test_file_reload_1.txt"
-        initial_content_1 = "Initial content 1."
-        with open(test_file_1, "w", encoding='utf-8') as f:
-            f.write(initial_content_1)
-
-        # --- Part 2: Setup for testing reload without path ---
-        test_file_2 = "test_file_reload_2.txt"
-        initial_content_2 = "Initial content 2."
-        with open(test_file_2, "w", encoding='utf-8') as f:
-            f.write(initial_content_2)
+    async def test_x_files_provider_refresh_logic(self):
+        """测试 Files provider 的 refresh 是否能正确同步文件系统"""
+        test_file = "test_file_refresh.txt"
+        initial_content = "Initial content for refresh."
+        with open(test_file, "w", encoding='utf-8') as f:
+            f.write(initial_content)
 
         try:
-            # Initialize with two files
-            files_provider = Files(test_file_1, test_file_2)
+            files_provider = Files(test_file)
             messages = Messages(UserMessage(files_provider))
             files_provider.render = AsyncMock(wraps=files_provider.render)
 
-            # Initial render and verification
-            rendered_initial = await messages.render_latest()
+            # 1. Initial render
+            await messages.render_latest()
             self.assertEqual(files_provider.render.call_count, 1)
-            self.assertIn(initial_content_1, rendered_initial[0]['content'])
-            self.assertIn(initial_content_2, rendered_initial[0]['content'])
 
-            # --- Test reloading a single file ---
-            updated_content_1 = "Updated content 1."
-            with open(test_file_1, "w", encoding='utf-8') as f:
-                f.write(updated_content_1)
+            # 2. Modify file externally
+            updated_content = "Updated content from external."
+            with open(test_file, "w", encoding='utf-8') as f:
+                f.write(updated_content)
 
-            self.assertTrue(files_provider.reload(test_file_1), "reload(path) should succeed.")
-            rendered_single_reload = await messages.render_latest()
+            # 3. render_latest() should detect change via refresh()
+            rendered_updated = await messages.render_latest()
             self.assertEqual(files_provider.render.call_count, 2)
-            self.assertIn(updated_content_1, rendered_single_reload[0]['content'])
-            self.assertIn(initial_content_2, rendered_single_reload[0]['content']) # File 2 should be unchanged
+            self.assertIn(updated_content, rendered_updated[0]['content'])
 
-            # --- Test reloading all files (no argument) ---
-            updated_content_1_again = "Updated content 1 again."
-            updated_content_2 = "Updated content 2."
-            with open(test_file_1, "w", encoding='utf-8') as f:
-                f.write(updated_content_1_again)
-            with open(test_file_2, "w", encoding='utf-8') as f:
-                f.write(updated_content_2)
+            # 4. Delete the file externally
+            os.remove(test_file)
 
-            self.assertTrue(files_provider.reload(), "reload() without args should succeed.")
-            rendered_all_reload = await messages.render_latest()
+            # 5. render_latest() should now show a file not found error
+            rendered_error = await messages.render_latest()
             self.assertEqual(files_provider.render.call_count, 3)
-            self.assertIn(updated_content_1_again, rendered_all_reload[0]['content'])
-            self.assertIn(updated_content_2, rendered_all_reload[0]['content'])
-            self.assertNotIn(initial_content_2, rendered_all_reload[0]['content'])
-
-            # --- Test edge cases ---
-            self.assertFalse(files_provider.reload("non_existent_file.txt"), "Reloading untracked file should fail.")
+            self.assertIn("[Error: File not found", rendered_error[0]['content'])
 
         finally:
-            # Cleanup
-            if os.path.exists(test_file_1):
-                os.remove(test_file_1)
-            if os.path.exists(test_file_2):
-                os.remove(test_file_2)
+            if os.path.exists(test_file):
+                os.remove(test_file)
+
+    async def test_y_files_provider_update_logic(self):
+        """测试 Files provider 的 update 方法的两种模式"""
+        test_file = "test_file_update.txt"
+        initial_content = "Initial content for update."
+        with open(test_file, "w", encoding='utf-8') as f:
+            f.write(initial_content)
+
+        try:
+            files_provider = Files() # Start empty
+            messages = Messages(UserMessage(files_provider))
+            files_provider.render = AsyncMock(wraps=files_provider.render)
+
+            # 1. Update with content from memory
+            files_provider.update(test_file, "Memory content.")
+            # Calling render_latest() will trigger refresh, which reads from disk and OVERWRITES memory content.
+            # This is the CORRECT behavior.
+            rendered_mem_then_refresh = await messages.render_latest()
+            self.assertEqual(files_provider.render.call_count, 1)
+            # Assert that the content is what's on disk, not what was in memory.
+            self.assertIn(initial_content, rendered_mem_then_refresh[0]['content'])
+            self.assertNotIn("Memory content.", rendered_mem_then_refresh[0]['content'])
+
+            # 2. Update from disk (no content arg)
+            files_provider.update(test_file)
+            rendered_disk = await messages.render_latest()
+            self.assertEqual(files_provider.render.call_count, 2)
+            self.assertIn(initial_content, rendered_disk[0]['content'])
+
+            # 3. Update from a non-existent file path
+            files_provider.update("non_existent.txt")
+            rendered_error = await messages.render_latest()
+            self.assertEqual(files_provider.render.call_count, 3)
+            self.assertIn("[Error: File not found", rendered_error[0]['content'])
+
+        finally:
+            if os.path.exists(test_file):
+                os.remove(test_file)
 
 
 # ==============================================================================
