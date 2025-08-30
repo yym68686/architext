@@ -1021,6 +1021,38 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         empty_text = Texts("")
         self.assertEqual(empty_text.content, "")
 
+    async def test_z7_provider_visibility(self):
+        """测试 provider 的可见性标志是否能正常工作"""
+        # 1. 初始化 provider，visible 默认为 True
+        text_provider = Texts("Hello, World!", name="greeting")
+        self.assertTrue(text_provider.visible)
+
+        messages = Messages(SystemMessage(text_provider))
+
+        # 2. 初始渲染，内容应该可见
+        rendered_visible = await messages.render_latest()
+        self.assertEqual(len(rendered_visible), 1)
+        self.assertEqual(rendered_visible[0]['content'], "Hello, World!")
+
+        # 3. 设置为不可见
+        provider = messages.provider("greeting")
+        provider.visible = False
+        self.assertFalse(provider.visible)
+
+        # 4. 再次渲染，内容应该消失
+        # 因为 visibility 变化会 mark_stale，所以需要 render_latest
+        rendered_invisible = await messages.render_latest()
+        self.assertEqual(len(rendered_invisible), 0, "设置为不可见后，消息应该不被渲染")
+
+        # 5. 再次设置为可见
+        provider.visible = True
+        self.assertTrue(provider.visible)
+
+        # 6. 渲染，内容应该再次出现
+        rendered_visible_again = await messages.render_latest()
+        self.assertEqual(len(rendered_visible_again), 1)
+        self.assertEqual(rendered_visible_again[0]['content'], "Hello, World!")
+
 
 # ==============================================================================
 # 6. 演示

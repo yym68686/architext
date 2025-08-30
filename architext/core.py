@@ -35,13 +35,30 @@ class ContentBlock:
 # 2. 上下文提供者 (带缓存)
 class ContextProvider(ABC):
     def __init__(self, name: str):
-        self.name = name; self._cached_content: Optional[str] = None; self._is_stale: bool = True
+        self.name = name
+        self._cached_content: Optional[str] = None
+        self._is_stale: bool = True
+        self._visible: bool = True
 
     def __str__(self):
         # This allows the object to be captured when used inside an f-string.
         return _register_provider(self)
 
     def mark_stale(self): self._is_stale = True
+
+    @property
+    def visible(self) -> bool:
+        """Gets the visibility of the provider."""
+        return self._visible
+
+    @visible.setter
+    def visible(self, value: bool):
+        """Sets the visibility of the provider."""
+        if self._visible != value:
+            self._visible = value
+            # Content needs to be re-evaluated, but the source data hasn't changed,
+            # so just marking it stale is enough for the renderer to reconsider it.
+            self.mark_stale()
     async def refresh(self):
         if self._is_stale:
             self._cached_content = await self.render()
@@ -51,7 +68,8 @@ class ContextProvider(ABC):
     @abstractmethod
     def update(self, *args, **kwargs): raise NotImplementedError
     def get_content_block(self) -> Optional[ContentBlock]:
-        if self._cached_content is not None: return ContentBlock(self.name, self._cached_content)
+        if self.visible and self._cached_content is not None:
+            return ContentBlock(self.name, self._cached_content)
         return None
 
 class Texts(ContextProvider):
