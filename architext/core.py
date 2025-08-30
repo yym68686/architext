@@ -2,6 +2,7 @@ import pickle
 import base64
 import asyncio
 import logging
+import hashlib
 import mimetypes
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
@@ -31,10 +32,21 @@ class ContextProvider(ABC):
         return None
 
 class Texts(ContextProvider):
-    def __init__(self, name: str, text: str): super().__init__(name); self._text = text
+    def __init__(self, name_or_text: str, text: Optional[str] = None):
+        if text is None:
+            _text = name_or_text
+            h = hashlib.sha1(_text.encode()).hexdigest()
+            _name = f"text_{h[:8]}"
+        else:
+            _name = name_or_text
+            _text = text
+        super().__init__(_name)
+        self._text = _text
+
     def update(self, text: str):
         self._text = text
         self.mark_stale()
+
     async def _fetch_content(self) -> str: return self._text
 
 class Tools(ContextProvider):
@@ -73,9 +85,17 @@ class Images(ContextProvider):
 
 # 3. 消息类 (已合并 MessageContent)
 class Message(ABC):
-    def __init__(self, role: str, *initial_items: ContextProvider):
+    def __init__(self, role: str, *initial_items: Union[ContextProvider, str]):
         self.role = role
-        self._items: List[ContextProvider] = list(initial_items)
+        processed_items = []
+        for item in initial_items:
+            if isinstance(item, str):
+                processed_items.append(Texts(item))
+            elif isinstance(item, ContextProvider):
+                processed_items.append(item)
+            else:
+                raise TypeError(f"Unsupported item type: {type(item)}. Must be str or ContextProvider.")
+        self._items: List[ContextProvider] = processed_items
         self._parent_messages: Optional['Messages'] = None
 
     def _render_content(self) -> str:

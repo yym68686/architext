@@ -25,7 +25,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         """测试优雅的初始化和首次渲染"""
         messages = Messages(
             SystemMessage(self.system_prompt_provider, self.tools_provider),
-            UserMessage(self.files_provider, Texts("user_input", "这是我的初始问题。"))
+            UserMessage(self.files_provider, Texts("这是我的初始问题。"))
         )
 
         self.assertEqual(len(messages), 2)
@@ -102,7 +102,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
         messages = Messages(
             UserMessage(
-                Texts("prompt", "Describe the image."),
+                Texts("Describe the image."),
                 Images(url=dummy_image_path) # Test with optional name
             )
         )
@@ -134,9 +134,9 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
         messages = Messages(
             UserMessage(
-                Texts("prefix", "Look at this:"),
+                Texts("Look at this:"),
                 Images(url=dummy_image_path, name="image"), # Explicit name for popping
-                Texts("suffix", "Any thoughts?")
+                Texts("Any thoughts?")
             )
         )
 
@@ -164,26 +164,26 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         """测试初始化和追加时自动合并消息的功能"""
         # 1. Test merging during initialization
         messages = Messages(
-            UserMessage(Texts("part1", "Hello,")),
-            UserMessage(Texts("part2", "world!")),
-            SystemMessage(Texts("system", "System prompt.")),
-            UserMessage(Texts("part3", "How are you?"))
+            UserMessage(Texts("Hello,")),
+            UserMessage(Texts("world!")),
+            SystemMessage(Texts("System prompt.")),
+            UserMessage(Texts("How are you?"))
         )
         # Should be merged into: User, System, User
         self.assertEqual(len(messages), 3)
         self.assertEqual(len(messages[0]._items), 2) # First UserMessage has 2 items
-        self.assertEqual(messages[0]._items[1].name, "part2")
+        self.assertIn("text_", messages[0]._items[1].name)
         self.assertEqual(messages[1].role, "system")
         self.assertEqual(messages[2].role, "user")
 
         # 2. Test merging during append
-        messages.append(UserMessage(Texts("part4", "I am fine.")))
+        messages.append(UserMessage(Texts("I am fine.")))
         self.assertEqual(len(messages), 3) # Still 3 messages
         self.assertEqual(len(messages[2]._items), 2) # Last UserMessage now has 2 items
-        self.assertEqual(messages[2]._items[1].name, "part4")
+        self.assertIn("text_", messages[2]._items[1].name)
 
         # 3. Test appending a different role
-        messages.append(SystemMessage(Texts("system2", "Another prompt.")))
+        messages.append(SystemMessage(Texts("Another prompt.")))
         self.assertEqual(len(messages), 4) # Should not merge
         self.assertEqual(messages[3].role, "system")
 
@@ -227,15 +227,16 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
     async def test_h_pop_message_by_index(self):
         """测试通过整数索引弹出Message的功能"""
+        user_provider = Texts("User message 1")
         messages = Messages(
-            SystemMessage(Texts("system_prompt", "System message")),
-            UserMessage(Texts("user_prompt_1", "User message 1")),
-            AssistantMessage(Texts("assistant_response", "Assistant response"))
+            SystemMessage(Texts("System message")),
+            UserMessage(user_provider),
+            AssistantMessage(Texts("Assistant response"))
         )
 
         # 初始状态断言
         self.assertEqual(len(messages), 3)
-        self.assertIsNotNone(messages.provider("user_prompt_1"))
+        self.assertIsNotNone(messages.provider(user_provider.name))
 
         # 弹出索引为 1 的 UserMessage
         popped_message = messages.pop(1)
@@ -243,7 +244,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         # 验证弹出的消息是否正确
         self.assertIsInstance(popped_message, UserMessage)
         self.assertEqual(len(popped_message.providers()), 1)
-        self.assertEqual(popped_message.providers()[0].name, "user_prompt_1")
+        self.assertEqual(popped_message.providers()[0].name, user_provider.name)
 
         # 验证 Messages 对象的当前状态
         self.assertEqual(len(messages), 2)
@@ -251,7 +252,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(messages[1].role, "assistant")
 
         # 验证 provider 索引是否已更新
-        self.assertIsNone(messages.provider("user_prompt_1"))
+        self.assertIsNone(messages.provider(user_provider.name))
 
         # 测试弹出不存在的索引
         popped_none = messages.pop(99)
@@ -261,7 +262,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
     async def test_i_generic_update_and_refresh(self):
         """测试新添加的 update 方法是否能正确更新内容并标记为 stale"""
         # 1. Setup providers
-        text_provider = Texts("greet", "Hello")
+        text_provider = Texts("Hello")
         tools_provider = Tools([{"name": "tool_A"}])
 
         dummy_image_path = "test_dummy_image_3.png"
@@ -311,9 +312,9 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
     async def test_j_pop_last_message_without_arguments(self):
         """测试不带参数调用 pop() 时，弹出最后一个 Message"""
-        m1 = SystemMessage(Texts("system", "System"))
-        m2 = UserMessage(Texts("user", "User"))
-        m3 = AssistantMessage(Texts("assistant", "Assistant"))
+        m1 = SystemMessage(Texts("System"))
+        m2 = UserMessage(Texts("User"))
+        m3 = AssistantMessage(Texts("Assistant"))
         messages = Messages(m1, m2, m3)
 
         self.assertEqual(len(messages), 3)
@@ -346,7 +347,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
         messages = Messages(
             UserMessage(
-                Texts("prompt", "This is a base64 image."),
+                Texts("This is a base64 image."),
                 Images(url=base64_image_url, name="base64_img")
             )
         )
@@ -379,9 +380,9 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
     def test_l_role_message_factory(self):
         """测试 RoleMessage 工厂类是否能创建正确的子类实例"""
-        system_msg = RoleMessage('system', Texts("test", "System content"))
-        user_msg = RoleMessage('user', Texts("test", "User content"))
-        assistant_msg = RoleMessage('assistant', Texts("test", "Assistant content"))
+        system_msg = RoleMessage('system', Texts("System content"))
+        user_msg = RoleMessage('user', Texts("User content"))
+        assistant_msg = RoleMessage('assistant', Texts("Assistant content"))
 
         self.assertIsInstance(system_msg, SystemMessage)
         self.assertEqual(system_msg.role, 'system')
@@ -392,7 +393,70 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
         # 测试无效的 role
         with self.assertRaises(ValueError):
-            RoleMessage('invalid_role', Texts("test", "Content"))
+            RoleMessage('invalid_role', Texts("Content"))
+
+    async def test_m_optional_name_for_texts(self):
+        """测试 Texts provider 的 name 参数是否可选，并能自动生成唯一名称"""
+        # 1. 不提供 name
+        text_provider_1 = Texts("This is a test.")
+        self.assertTrue(text_provider_1.name.startswith("text_"))
+
+        # 2. 提供 name
+        text_provider_2 = Texts("my_name", "This is another test.")
+        self.assertEqual(text_provider_2.name, "my_name")
+
+        # 3. 验证相同内容的文本生成相同的 name
+        text_provider_3 = Texts("This is a test.")
+        self.assertEqual(text_provider_1.name, text_provider_3.name)
+
+        # 4. 验证不同内容的文本生成不同的 name
+        text_provider_4 = Texts("This is a different test.")
+        self.assertNotEqual(text_provider_1.name, text_provider_4.name)
+
+        # 5. 在 Messages 中使用
+        messages = Messages(UserMessage(text_provider_1))
+        provider_from_messages = messages.provider(text_provider_1.name)
+        self.assertIs(provider_from_messages, text_provider_1)
+
+    async def test_n_string_to_texts_conversion(self):
+        """测试在Message初始化时，字符串是否能被自动转换为Texts provider"""
+        # 1. 初始化一个包含字符串的UserMessage
+        user_message = UserMessage(self.files_provider, "This is a raw string.")
+
+        # 验证 _items 列表中的第二个元素是否是 Texts 类的实例
+        self.assertEqual(len(user_message.providers()), 2)
+        self.assertIsInstance(user_message.providers()[0], Files)
+        self.assertIsInstance(user_message.providers()[1], Texts)
+
+        # 验证转换后的 Texts provider 内容是否正确
+        # 我们需要异步地获取内容
+        text_provider = user_message.providers()[1]
+        await text_provider.refresh() # 手动刷新以获取内容
+        content_block = text_provider.get_content_block()
+        self.assertIsNotNone(content_block)
+        self.assertEqual(content_block.content, "This is a raw string.")
+
+        # 2. 在 Messages 容器中测试
+        messages = Messages(
+            SystemMessage("System prompt here."),
+            user_message
+        )
+        await messages.refresh()
+        rendered = messages.render()
+
+        self.assertEqual(len(rendered), 2)
+        self.assertEqual(rendered[0]['content'], "System prompt here.")
+        # 在user message中，files provider没有内容，所以只有string provider的内容
+        self.assertEqual(rendered[1]['content'], "This is a raw string.")
+
+        # 3. 测试RoleMessage工厂类
+        factory_user_msg = RoleMessage('user', "Factory-created string.")
+        self.assertIsInstance(factory_user_msg, UserMessage)
+        self.assertIsInstance(factory_user_msg.providers()[0], Texts)
+
+        # 4. 测试无效类型
+        with self.assertRaises(TypeError):
+            UserMessage(123) # 传入不支持的整数类型
 
 # ==============================================================================
 # 6. 演示
@@ -407,8 +471,8 @@ async def run_demo():
     print("\n>>> 场景 A: 使用新的、优雅的构造函数直接初始化 Messages")
     messages = Messages(
         SystemMessage(system_prompt_provider, tools_provider),
-        UserMessage(files_provider, Texts("user_input", "这是我的初始问题。")),
-        UserMessage(Texts("user_input2", "这是我的初始问题2。"))
+        UserMessage(files_provider, Texts("这是我的初始问题。")),
+        UserMessage(Texts("这是我的初始问题2。"))
     )
 
     print("\n--- 渲染后的初始 Messages (首次渲染，全部刷新) ---")
@@ -443,7 +507,7 @@ async def run_demo():
 
     multimodal_message = Messages(
         UserMessage(
-            Texts("prompt", "What do you see in this image?"),
+            Texts("What do you see in this image?"),
             Images(url="dummy_image.png")
         )
     )
@@ -480,11 +544,11 @@ async def run_demo():
     ]
 
     tool_use_messages = Messages(
-        SystemMessage(Texts("system_prompt", "You are a helpful assistant. You must use the provided tools to answer questions.")),
-        UserMessage(Texts("user_question", "What is the sum of 5 and 10?")),
+        SystemMessage(Texts("You are a helpful assistant. You must use the provided tools to answer questions.")),
+        UserMessage(Texts("What is the sum of 5 and 10?")),
         ToolCalls(tool_call_request),
         ToolResults(tool_call_id="call_rddWXkDikIxllRgbPrR6XjtMVSBPv", content="15"),
-        AssistantMessage(Texts("final_answer", "The sum of 5 and 10 is 15."))
+        AssistantMessage(Texts("The sum of 5 and 10 is 15."))
     )
 
     print("\n--- 渲染后的 Tool-Use Messages ---")
