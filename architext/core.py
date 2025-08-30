@@ -89,6 +89,8 @@ class Message(ABC):
         for item in initial_items:
             if isinstance(item, str):
                 processed_items.append(Texts(text=item))
+            elif isinstance(item, Message):
+                processed_items.extend(item.providers())
             elif isinstance(item, ContextProvider):
                 processed_items.append(item)
             elif isinstance(item, list):
@@ -140,11 +142,17 @@ class Message(ABC):
         if isinstance(other, str):
             new_items = self._items + [Texts(text=other)]
             return type(self)(*new_items)
+        if isinstance(other, Message):
+            new_items = self._items + other.providers()
+            return type(self)(*new_items)
         return NotImplemented
 
     def __radd__(self, other):
         if isinstance(other, str):
             new_items = [Texts(text=other)] + self._items
+            return type(self)(*new_items)
+        if isinstance(other, Message):
+            new_items = other.providers() + self._items
             return type(self)(*new_items)
         return NotImplemented
 

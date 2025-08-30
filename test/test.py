@@ -554,6 +554,41 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(providers_add[0].get_content_block().content, "hello")
         self.assertEqual(providers_add[1].get_content_block().content, "world")
 
+    async def test_r_message_addition_and_flattening(self):
+        """测试 Message 对象相加和嵌套初始化时的扁平化功能"""
+        # 1. 测试 "str" + UserMessage
+        combined_message = "hi" + UserMessage("hello")
+        self.assertIsInstance(combined_message, UserMessage)
+        self.assertEqual(len(combined_message.providers()), 2)
+
+        providers = combined_message.providers()
+        await asyncio.gather(*[p.refresh() for p in providers])
+        self.assertEqual(providers[0].get_content_block().content, "hi")
+        self.assertEqual(providers[1].get_content_block().content, "hello")
+
+        # 2. 测试 UserMessage(UserMessage(...)) 扁平化
+        # 按照用户的要求，UserMessage(UserMessage(...)) 应该被扁平化
+        nested_message = UserMessage(UserMessage("item1", "item2"))
+        self.assertEqual(len(nested_message.providers()), 2)
+
+        providers_nested = nested_message.providers()
+        self.assertIsInstance(providers_nested[0], Texts)
+        self.assertIsInstance(providers_nested[1], Texts)
+
+        await asyncio.gather(*[p.refresh() for p in providers_nested])
+        self.assertEqual(providers_nested[0].get_content_block().content, "item1")
+        self.assertEqual(providers_nested[1].get_content_block().content, "item2")
+
+        # 3. 结合 1 和 2，测试用户的完整场景
+        final_message = UserMessage("hi" + UserMessage("hello"))
+        self.assertIsInstance(final_message, UserMessage)
+        self.assertEqual(len(final_message.providers()), 2)
+
+        providers_final = final_message.providers()
+        await asyncio.gather(*[p.refresh() for p in providers_final])
+        self.assertEqual(providers_final[0].get_content_block().content, "hi")
+        self.assertEqual(providers_final[1].get_content_block().content, "hello")
+
 
 # ==============================================================================
 # 6. 演示
