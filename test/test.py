@@ -998,6 +998,29 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         # 验证两次渲染的时间戳不同
         self.assertNotEqual(time1_str_part, time2_str_part, "f-string 中的动态 lambda 内容在两次渲染之间应该更新")
 
+    def test_z6_direct_content_access(self):
+        """测试通过 .content 属性直接访问 Texts 内容"""
+        # 1. 测试静态内容
+        static_text = Texts("Hello, Architext!")
+        self.assertEqual(static_text.content, "Hello, Architext!")
+
+        # 2. 测试动态内容
+        from datetime import datetime
+        current_time_str = datetime.now().isoformat()
+        dynamic_text = Texts(lambda: current_time_str)
+        self.assertEqual(dynamic_text.content, current_time_str)
+
+        # 3. 测试更新后的内容访问
+        static_text.update("Updated content.")
+        self.assertEqual(static_text.content, "Updated content.")
+
+        # 4. 测试 None 和空字符串
+        none_text = Texts(name="none_text") # Provide a name when text is None
+        self.assertEqual(none_text.content, "")
+
+        empty_text = Texts("")
+        self.assertEqual(empty_text.content, "")
+
 
 # ==============================================================================
 # 6. 演示

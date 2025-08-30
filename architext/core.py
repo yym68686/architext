@@ -84,13 +84,21 @@ class Texts(ContextProvider):
         self._is_dynamic = callable(self._text)
         self.mark_stale()
 
-    async def render(self) -> Optional[str]:
+    @property
+    def content(self) -> Optional[str]:
+        """
+        Synchronously retrieves the raw text content as a property.
+        If the content is dynamic (a callable), it executes the callable.
+        """
         if self._is_dynamic:
             # Ensure dynamic content returns a string, even if empty
             result = self._text()
             return result if result is not None else ""
         # Ensure static content returns a string, even if empty
         return self._text if self._text is not None else ""
+
+    async def render(self) -> Optional[str]:
+        return self.content
 
 class Tools(ContextProvider):
     def __init__(self, tools_json: Optional[List[Dict]] = None, name: str = "tools"):
