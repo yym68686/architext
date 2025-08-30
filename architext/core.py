@@ -360,7 +360,17 @@ class Message(ABC):
         if self._parent_messages:
             self._parent_messages._notify_provider_added(item, self)
 
-    def provider(self) -> List[ContextProvider]: return self._items
+    def provider(self, name: Optional[str] = None) -> Optional[Union[ContextProvider, ProviderGroup, List[ContextProvider]]]:
+        if name is None:
+            return self._items
+
+        named_providers = [p for p in self._items if hasattr(p, 'name') and p.name == name]
+
+        if not named_providers:
+            return None
+        if len(named_providers) == 1:
+            return named_providers[0]
+        return ProviderGroup(named_providers)
 
     def __add__(self, other):
         if isinstance(other, str):

@@ -1158,6 +1158,30 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         with self.assertRaises(IndexError):
             _ = mess[2]
 
+    async def test_zb_message_provider_by_name(self):
+        """测试是否可以通过名称从 Message 对象中获取 provider"""
+        # 1. 创建一个包含命名 provider 的 Message
+        message = UserMessage(
+            Texts("Some instruction", name="instruction"),
+            Tools([{"name": "a_tool"}], name="tools"),
+            Texts("Another instruction", name="instruction")
+        )
+
+        # 2. 测试获取单个 provider
+        tools_provider = message.provider("tools")
+        self.assertIsInstance(tools_provider, Tools)
+        self.assertEqual(tools_provider.name, "tools")
+
+        # 3. 测试获取多个同名 provider
+        instruction_providers = message.provider("instruction")
+        self.assertIsInstance(instruction_providers, ProviderGroup)
+        self.assertEqual(len(instruction_providers), 2)
+        self.assertTrue(all(isinstance(p, Texts) for p in instruction_providers))
+
+        # 4. 测试获取不存在的 provider
+        non_existent_provider = message.provider("non_existent")
+        self.assertIsNone(non_existent_provider)
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================
