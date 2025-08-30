@@ -1258,6 +1258,50 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         self.assertEqual(messages3[2].content, "C")
         self.assertIsInstance(messages3[1], AssistantMessage)
 
+    async def test_ze_fstring_lambda_serialization(self):
+        """测试包含 lambda 的 f-string 消息是否可以被序列化和反序列化"""
+        import platform
+        import os
+
+        # 1. 创建一个使用 f-string 和 lambda 的动态消息
+        f_string_message = f"""系统信息: {Texts(lambda: platform.platform())}"""
+        messages_to_save = Messages(SystemMessage(f_string_message))
+
+        # 2. 定义一个临时文件路径
+        test_file_path = "test_lambda_serialization.pkl"
+
+        # 3. 序列化和反序列化
+        try:
+            # 保存
+            messages_to_save.save(test_file_path)
+
+            # 确认文件已创建
+            self.assertTrue(os.path.exists(test_file_path))
+
+            # 加载
+            messages_loaded = Messages.load(test_file_path)
+
+            # 验证加载的对象
+            self.assertIsNotNone(messages_loaded)
+            self.assertIsInstance(messages_loaded, Messages)
+            self.assertEqual(len(messages_loaded), 1)
+
+            # 4. 渲染加载后的消息以验证 lambda 是否仍然有效
+            rendered = await messages_loaded.render_latest()
+
+            self.assertEqual(len(rendered), 1)
+            self.assertIn("系统信息:", rendered[0]['content'])
+            # 验证 platform.platform() 的结果是否在渲染内容中
+            self.assertIn(platform.platform(), rendered[0]['content'])
+
+        except Exception as e:
+            # 如果出现任何异常，测试失败
+            self.fail(f"序列化或反序列化带有 lambda 的 f-string 消息时出错: {e}")
+        finally:
+            # 5. 清理临时文件
+            if os.path.exists(test_file_path):
+                os.remove(test_file_path)
+
 
 # ==============================================================================
 # 6. 演示

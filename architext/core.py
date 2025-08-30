@@ -147,6 +147,29 @@ class Texts(ContextProvider):
     async def render(self) -> Optional[str]:
         return self.content
 
+    def __getstate__(self):
+        """Custom state for pickling."""
+        state = self.__dict__.copy()
+        if self._is_dynamic:
+            # For dynamic content, we snapshot its current value for serialization.
+            # The lambda function itself cannot be pickled.
+            try:
+                # Evaluate the lambda and store it as a static string
+                state['_text'] = self.content
+                # Mark it as no longer dynamic in the pickled state
+                state['_is_dynamic'] = False
+            except Exception as e:
+                # If the lambda fails for some reason, store an error message.
+                logging.error(f"Error evaluating dynamic text '{self.name}' during pickling: {e}")
+                state['_text'] = f"[Error: Could not evaluate dynamic content during save: {e}]"
+                state['_is_dynamic'] = False
+        return state
+
+    def __setstate__(self, state):
+        """Custom state for unpickling."""
+        # Just restore the dictionary. The transformation is one-way.
+        self.__dict__.update(state)
+
     def __eq__(self, other):
         if not isinstance(other, Texts):
             return NotImplemented
