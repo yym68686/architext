@@ -299,7 +299,7 @@ class Message(ABC):
                     processed_items.append(Texts(text=item))
 
             elif isinstance(item, Message):
-                processed_items.extend(item.providers())
+                processed_items.extend(item.provider())
             elif isinstance(item, ContextProvider):
                 processed_items.append(item)
             elif isinstance(item, list):
@@ -360,14 +360,14 @@ class Message(ABC):
         if self._parent_messages:
             self._parent_messages._notify_provider_added(item, self)
 
-    def providers(self) -> List[ContextProvider]: return self._items
+    def provider(self) -> List[ContextProvider]: return self._items
 
     def __add__(self, other):
         if isinstance(other, str):
             new_items = self._items + [Texts(text=other)]
             return type(self)(*new_items)
         if isinstance(other, Message):
-            new_items = self._items + other.providers()
+            new_items = self._items + other.provider()
             return type(self)(*new_items)
         return NotImplemented
 
@@ -376,7 +376,7 @@ class Message(ABC):
             new_items = [Texts(text=other)] + self._items
             return type(self)(*new_items)
         if isinstance(other, Message):
-            new_items = other.providers() + self._items
+            new_items = other.provider() + self._items
             return type(self)(*new_items)
         return NotImplemented
 
@@ -563,7 +563,7 @@ class Messages:
                     return None
                 popped_message = self._messages.pop(key)
                 popped_message._parent_messages = None
-                for provider in popped_message.providers():
+                for provider in popped_message.provider():
                     self._notify_provider_removed(provider)
                 return popped_message
             except IndexError:
@@ -589,12 +589,12 @@ class Messages:
     def append(self, message: Message):
         if self._messages and self._messages[-1].role == message.role:
             last_message = self._messages[-1]
-            for provider in message.providers():
+            for provider in message.provider():
                 last_message.append(provider)
         else:
             message._parent_messages = self
             self._messages.append(message)
-            for p in message.providers():
+            for p in message.provider():
                 self._notify_provider_added(p, message)
 
     def save(self, file_path: str):

@@ -204,7 +204,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
         # 验证是否真的从 Message 对象中弹出了
         self.assertIs(popped_provider, self.tools_provider, "应该从 SystemMessage 中成功弹出 provider")
-        self.assertNotIn(self.tools_provider, system_message.providers(), "provider 不应再存在于 SystemMessage 的 providers 列表中")
+        self.assertNotIn(self.tools_provider, system_message.provider(), "provider 不应再存在于 SystemMessage 的 provider 列表中")
 
         # 3. 核心问题：检查顶层 Messages 的索引
         # 在理想情况下，直接修改子消息应该同步更新顶层索引。
@@ -237,8 +237,8 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
         # 验证弹出的消息是否正确
         self.assertIsInstance(popped_message, UserMessage)
-        self.assertEqual(len(popped_message.providers()), 1)
-        self.assertEqual(popped_message.providers()[0].name, user_provider.name)
+        self.assertEqual(len(popped_message.provider()), 1)
+        self.assertEqual(popped_message.provider()[0].name, user_provider.name)
 
         # 验证 Messages 对象的当前状态
         self.assertEqual(len(messages), 2)
@@ -418,13 +418,13 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         user_message = UserMessage(self.files_provider, "This is a raw string.")
 
         # 验证 _items 列表中的第二个元素是否是 Texts 类的实例
-        self.assertEqual(len(user_message.providers()), 2)
-        self.assertIsInstance(user_message.providers()[0], Files)
-        self.assertIsInstance(user_message.providers()[1], Texts)
+        self.assertEqual(len(user_message.provider()), 2)
+        self.assertIsInstance(user_message.provider()[0], Files)
+        self.assertIsInstance(user_message.provider()[1], Texts)
 
         # 验证转换后的 Texts provider 内容是否正确
         # 我们需要异步地获取内容
-        text_provider = user_message.providers()[1]
+        text_provider = user_message.provider()[1]
         await text_provider.refresh() # 手动刷新以获取内容
         content_block = text_provider.get_content_block()
         self.assertIsNotNone(content_block)
@@ -446,7 +446,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         # 3. 测试RoleMessage工厂类
         factory_user_msg = RoleMessage('user', "Factory-created string.")
         self.assertIsInstance(factory_user_msg, UserMessage)
-        self.assertIsInstance(factory_user_msg.providers()[0], Texts)
+        self.assertIsInstance(factory_user_msg.provider()[0], Texts)
 
         # 4. 测试无效类型
         with self.assertRaises(TypeError):
@@ -461,12 +461,12 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         ]
         user_message_mixed = UserMessage(mixed_content_list)
 
-        self.assertEqual(len(user_message_mixed.providers()), 2)
-        self.assertIsInstance(user_message_mixed.providers()[0], Texts)
-        self.assertIsInstance(user_message_mixed.providers()[1], Images)
+        self.assertEqual(len(user_message_mixed.provider()), 2)
+        self.assertIsInstance(user_message_mixed.provider()[0], Texts)
+        self.assertIsInstance(user_message_mixed.provider()[1], Images)
 
         # 验证内容
-        providers = user_message_mixed.providers()
+        providers = user_message_mixed.provider()
         await asyncio.gather(*[p.refresh() for p in providers]) # 刷新所有providers
         self.assertEqual(providers[0].get_content_block().content, 'Describe the following image.')
         self.assertEqual(providers[1].get_content_block().content, 'data:image/png;base64,VGhpcyBpcyBhIGR1bW15IGltYWdlIGZpbGUu')
@@ -478,9 +478,9 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         ]
         user_message_text_only = UserMessage(text_only_list)
 
-        self.assertEqual(len(user_message_text_only.providers()), 2)
-        self.assertIsInstance(user_message_text_only.providers()[0], Texts)
-        self.assertIsInstance(user_message_text_only.providers()[1], Texts)
+        self.assertEqual(len(user_message_text_only.provider()), 2)
+        self.assertIsInstance(user_message_text_only.provider()[0], Texts)
+        self.assertIsInstance(user_message_text_only.provider()[1], Texts)
 
         # 3. 在 Messages 容器中测试
         messages = Messages(UserMessage(mixed_content_list))
@@ -523,9 +523,9 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
         # 3. 验证新消息的类型和内容
         self.assertIsInstance(new_message, UserMessage, "结果应该是一个 UserMessage 实例")
-        self.assertEqual(len(new_message.providers()), 2, "新消息应该包含两个 provider")
+        self.assertEqual(len(new_message.provider()), 2, "新消息应该包含两个 provider")
 
-        providers = new_message.providers()
+        providers = new_message.provider()
         self.assertIsInstance(providers[0], Texts, "第一个 provider 应该是 Texts 类型")
         self.assertIsInstance(providers[1], Texts, "第二个 provider 应该是 Texts 类型")
 
@@ -536,14 +536,14 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(providers[1].get_content_block().content, "hello", "第二个 provider 的内容应该是 'hello'")
 
         # 4. 验证原始消息没有被修改
-        self.assertEqual(len(original_message.providers()), 1, "原始消息不应该被修改")
+        self.assertEqual(len(original_message.provider()), 1, "原始消息不应该被修改")
 
         # 5. 测试 UserMessage + "string"
         new_message_add = original_message + "world"
         self.assertIsInstance(new_message_add, UserMessage)
-        self.assertEqual(len(new_message_add.providers()), 2)
+        self.assertEqual(len(new_message_add.provider()), 2)
 
-        providers_add = new_message_add.providers()
+        providers_add = new_message_add.provider()
         await asyncio.gather(*[p.refresh() for p in providers_add])
         self.assertEqual(providers_add[0].get_content_block().content, "hello")
         self.assertEqual(providers_add[1].get_content_block().content, "world")
@@ -553,9 +553,9 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         # 1. 测试 "str" + UserMessage
         combined_message = "hi" + UserMessage("hello")
         self.assertIsInstance(combined_message, UserMessage)
-        self.assertEqual(len(combined_message.providers()), 2)
+        self.assertEqual(len(combined_message.provider()), 2)
 
-        providers = combined_message.providers()
+        providers = combined_message.provider()
         await asyncio.gather(*[p.refresh() for p in providers])
         self.assertEqual(providers[0].get_content_block().content, "hi")
         self.assertEqual(providers[1].get_content_block().content, "hello")
@@ -563,9 +563,9 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         # 2. 测试 UserMessage(UserMessage(...)) 扁平化
         # 按照用户的要求，UserMessage(UserMessage(...)) 应该被扁平化
         nested_message = UserMessage(UserMessage("item1", "item2"))
-        self.assertEqual(len(nested_message.providers()), 2)
+        self.assertEqual(len(nested_message.provider()), 2)
 
-        providers_nested = nested_message.providers()
+        providers_nested = nested_message.provider()
         self.assertIsInstance(providers_nested[0], Texts)
         self.assertIsInstance(providers_nested[1], Texts)
 
@@ -576,9 +576,9 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         # 3. 结合 1 和 2，测试用户的完整场景
         final_message = UserMessage("hi" + UserMessage("hello"))
         self.assertIsInstance(final_message, UserMessage)
-        self.assertEqual(len(final_message.providers()), 2)
+        self.assertEqual(len(final_message.provider()), 2)
 
-        providers_final = final_message.providers()
+        providers_final = final_message.provider()
         await asyncio.gather(*[p.refresh() for p in providers_final])
         self.assertEqual(providers_final[0].get_content_block().content, "hi")
         self.assertEqual(providers_final[1].get_content_block().content, "hello")
@@ -1108,7 +1108,7 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         user_message = UserMessage("你好, Architext!")
         # 对于简单的 Texts, refresh 不是必须的, 但这是个好习惯
         # Message 类本身没有 refresh, 调用其 providers 的 refresh
-        for p in user_message.providers():
+        for p in user_message.provider():
             await p.refresh()
 
         # 2. 直接访问 .content 属性
@@ -1120,7 +1120,7 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
             "这是一张图片:",
             Images(url="data:image/png;base64,FAKE_IMG_DATA")
         )
-        for p in multimodal_message.providers():
+        for p in multimodal_message.provider():
             await p.refresh()
 
         # 4. 访问多模态消息的 .content 属性，期望返回一个列表
@@ -1132,7 +1132,7 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
 
         # 5. 测试通过 RoleMessage 工厂创建的消息
         role_message = RoleMessage('user', "通过工厂创建的内容")
-        for p in role_message.providers():
+        for p in role_message.provider():
             await p.refresh()
         self.assertEqual(role_message.content, "通过工厂创建的内容")
 
