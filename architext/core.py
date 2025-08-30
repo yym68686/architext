@@ -156,6 +156,27 @@ class Message(ABC):
             return type(self)(*new_items)
         return NotImplemented
 
+    def __getitem__(self, key: str) -> Any:
+        """
+        使得 Message 对象支持字典风格的访问 (e.g., message['content'])。
+        """
+        if key == 'role':
+            return self.role
+        elif key == 'content':
+            # 直接调用 to_dict 并提取 'content'，确保逻辑一致
+            rendered_dict = self.to_dict()
+            return rendered_dict.get('content') if rendered_dict else None
+        # 对于 tool_calls 等特殊属性，也通过 to_dict 获取
+        elif hasattr(self, key):
+            rendered_dict = self.to_dict()
+            if rendered_dict and key in rendered_dict:
+                return rendered_dict[key]
+
+        # 如果在对象本身或其 to_dict() 中都找不到，则引发 KeyError
+        if hasattr(self, key):
+             return getattr(self, key)
+        raise KeyError(f"'{key}'")
+
     def __repr__(self): return f"Message(role='{self.role}', items={[i.name for i in self._items]})"
     def __bool__(self) -> bool:
         return bool(self._items)

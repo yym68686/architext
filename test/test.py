@@ -656,6 +656,36 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         # 4. 验证 .get("tool_calls") 在普通消息上返回 None
         self.assertIsNone(popped_user_message.get("tool_calls"), "在没有 tool_calls 属性的消息上 .get() 应该返回 None")
 
+    async def test_u_message_dictionary_style_access(self):
+        """测试 Message 对象是否支持字典风格的访问 (e.g., message['content'])"""
+        messages = Messages(
+            UserMessage("Hello, world!"),
+            AssistantMessage(
+                "A picture:",
+                Images(url="data:image/png;base64,FAKE", name="fake_image")
+            )
+        )
+        await messages.refresh()
+
+        # 1. 测试简单的文本消息
+        user_msg = messages[0]
+        # 这两行会因为没有 __getitem__ 而失败
+        self.assertEqual(user_msg['role'], 'user')
+        self.assertEqual(user_msg['content'], "Hello, world!")
+
+        # 2. 测试多模态消息
+        assistant_msg = messages[1]
+        self.assertEqual(assistant_msg['role'], 'assistant')
+        content = assistant_msg['content']
+        self.assertIsInstance(content, list)
+        self.assertEqual(len(content), 2)
+        self.assertEqual(content[0]['type'], 'text')
+        self.assertEqual(content[1]['type'], 'image_url')
+
+        # 3. 测试访问不存在的键
+        with self.assertRaises(KeyError):
+            _ = user_msg['non_existent_key']
+
 
 # ==============================================================================
 # 6. 演示
