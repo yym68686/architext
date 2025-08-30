@@ -819,6 +819,59 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
             if os.path.exists(test_file):
                 os.remove(test_file)
 
+    async def test_z_dynamic_texts_provider(self):
+        """测试 Texts provider 是否支持可调用对象以实现动态内容"""
+        import time
+        from datetime import datetime
+
+        # 1. 使用 lambda 函数创建一个动态的 Texts provider
+        # 每次调用 render 时，它都应该返回当前时间
+        dynamic_text_provider = Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        messages = Messages(UserMessage(dynamic_text_provider))
+
+        # 2. 第一次渲染
+        rendered1 = await messages.render_latest()
+        time1_str = rendered1[0]['content']
+        self.assertIsNotNone(time1_str)
+
+        # 3. 等待一秒钟
+        time.sleep(1)
+
+        # 4. 第二次渲染，并期望内容已更新
+        rendered2 = await messages.render_latest()
+        time2_str = rendered2[0]['content']
+        self.assertIsNotNone(time2_str)
+
+        # 5. 验证两次渲染的时间戳不同
+        self.assertNotEqual(time1_str, time2_str, "动态 Texts provider 的内容在两次渲染之间应该更新")
+
+    async def test_z2_dynamic_texts_with_prefix(self):
+        """测试动态 Texts provider 包含静态前缀时也能正确更新"""
+        import time
+        from datetime import datetime
+        import platform
+
+        # 1. 创建一个包含静态前缀和动态内容的 provider
+        # 正确的用法是将整个表达式放入 lambda
+        dynamic_provider = Texts(lambda: f"平台信息：{platform.platform()}, 时间：{datetime.now().isoformat()}")
+        messages = Messages(UserMessage(dynamic_provider))
+
+        # 2. 第一次渲染
+        rendered1 = await messages.render_latest()
+        content1 = rendered1[0]['content']
+        self.assertIn("平台信息：", content1)
+
+        # 3. 等待一秒
+        time.sleep(1)
+
+        # 4. 第二次渲染
+        rendered2 = await messages.render_latest()
+        content2 = rendered2[0]['content']
+        self.assertIn("平台信息：", content2)
+
+        # 5. 验证两次内容不同（因为时间戳变了）
+        self.assertNotEqual(content1, content2, "包含静态前缀的动态 provider 内容应该更新")
+
 
 # ==============================================================================
 # 6. 演示

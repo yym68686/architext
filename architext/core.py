@@ -6,7 +6,7 @@ import hashlib
 import mimetypes
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Callable
 
 # 1. 核心数据结构: ContentBlock
 @dataclass
@@ -32,20 +32,35 @@ class ContextProvider(ABC):
         return None
 
 class Texts(ContextProvider):
-    def __init__(self, text: str, name: Optional[str] = None):
+    def __init__(self, text: Union[str, Callable[[], str]], name: Optional[str] = None):
         self._text = text
+        self._is_dynamic = callable(self._text)
+
         if name is None:
-            h = hashlib.sha1(self._text.encode()).hexdigest()
-            _name = f"text_{h[:8]}"
+            if self._is_dynamic:
+                import uuid
+                _name = f"dynamic_text_{uuid.uuid4().hex[:8]}"
+            else:
+                h = hashlib.sha1(self._text.encode()).hexdigest()
+                _name = f"text_{h[:8]}"
         else:
             _name = name
         super().__init__(_name)
 
-    def update(self, text: str):
+    async def refresh(self):
+        if self._is_dynamic:
+            self._is_stale = True
+        await super().refresh()
+
+    def update(self, text: Union[str, Callable[[], str]]):
         self._text = text
+        self._is_dynamic = callable(self._text)
         self.mark_stale()
 
-    async def render(self) -> str: return self._text
+    async def render(self) -> str:
+        if self._is_dynamic:
+            return self._text()
+        return self._text
 
 class Tools(ContextProvider):
     def __init__(self, tools_json: List[Dict]): super().__init__("tools"); self._tools_json = tools_json
