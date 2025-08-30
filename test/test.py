@@ -37,32 +37,32 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
     async def test_b_provider_passthrough_and_refresh(self):
         """测试通过 mock 验证缓存和刷新逻辑"""
-        # 我们真正关心的是 _fetch_content 是否被不必要地调用
+        # 我们真正关心的是 render 是否被不必要地调用
         # 所以我们 mock 底层的它，而不是 refresh 方法
-        original_fetch_content = self.files_provider._fetch_content
-        self.files_provider._fetch_content = AsyncMock(side_effect=original_fetch_content)
+        original_render = self.files_provider.render
+        self.files_provider.render = AsyncMock(side_effect=original_render)
 
         messages = Messages(UserMessage(self.files_provider))
 
         # 1. 首次刷新
         self.files_provider.update("path1", "content1")
         await messages.refresh()
-        # _fetch_content 应该被调用了 1 次
-        self.assertEqual(self.files_provider._fetch_content.call_count, 1)
+        # render 应该被调用了 1 次
+        self.assertEqual(self.files_provider.render.call_count, 1)
 
-        # 2. 再次刷新，内容未变，不应再次调用 _fetch_content
+        # 2. 再次刷新，内容未变，不应再次调用 render
         await messages.refresh()
         # 调用次数应该仍然是 1，证明缓存生效
-        self.assertEqual(self.files_provider._fetch_content.call_count, 1)
+        self.assertEqual(self.files_provider.render.call_count, 1)
 
         # 3. 更新文件内容，这会标记 provider 为 stale
         self.files_provider.update("path2", "content2")
 
-        # 4. 再次刷新，现在应该会重新调用 _fetch_content
+        # 4. 再次刷新，现在应该会重新调用 render
         await messages.refresh()
         rendered = messages.render()
         # 调用次数应该变为 2
-        self.assertEqual(self.files_provider._fetch_content.call_count, 2)
+        self.assertEqual(self.files_provider.render.call_count, 2)
         # 并且渲染结果包含了新内容
         self.assertIn("content2", rendered[0]['content'])
 
@@ -271,18 +271,18 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
         messages = Messages(UserMessage(text_provider, tools_provider, image_provider))
 
-        # Mock the _fetch_content methods to monitor calls
-        text_provider._fetch_content = AsyncMock(wraps=text_provider._fetch_content)
-        tools_provider._fetch_content = AsyncMock(wraps=tools_provider._fetch_content)
-        image_provider._fetch_content = AsyncMock(wraps=image_provider._fetch_content)
+        # Mock the render methods to monitor calls
+        text_provider.render = AsyncMock(wraps=text_provider.render)
+        tools_provider.render = AsyncMock(wraps=tools_provider.render)
+        image_provider.render = AsyncMock(wraps=image_provider.render)
 
         # 2. Initial render
         rendered_initial = await messages.render_latest()
         self.assertIn("Hello", rendered_initial[0]['content'][0]['text'])
         self.assertIn("tool_A", rendered_initial[0]['content'][1]['text'])
-        self.assertEqual(text_provider._fetch_content.call_count, 1)
-        self.assertEqual(tools_provider._fetch_content.call_count, 1)
-        self.assertEqual(image_provider._fetch_content.call_count, 1)
+        self.assertEqual(text_provider.render.call_count, 1)
+        self.assertEqual(tools_provider.render.call_count, 1)
+        self.assertEqual(image_provider.render.call_count, 1)
 
         # 3. Update providers
         text_provider.update("Goodbye")
@@ -294,17 +294,17 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
         # Calling refresh again should not re-fetch yet because we haven't called messages.refresh()
         await text_provider.refresh()
-        self.assertEqual(text_provider._fetch_content.call_count, 2)
+        self.assertEqual(text_provider.render.call_count, 2)
 
         # 4. Re-render after update
         rendered_updated = await messages.render_latest()
         self.assertIn("Goodbye", rendered_updated[0]['content'][0]['text'])
         self.assertIn("tool_B", rendered_updated[0]['content'][1]['text'])
 
-        # Verify that _fetch_content was called again for all updated providers
-        self.assertEqual(text_provider._fetch_content.call_count, 2)
-        self.assertEqual(tools_provider._fetch_content.call_count, 2)
-        self.assertEqual(image_provider._fetch_content.call_count, 2)
+        # Verify that render was called again for all updated providers
+        self.assertEqual(text_provider.render.call_count, 2)
+        self.assertEqual(tools_provider.render.call_count, 2)
+        self.assertEqual(image_provider.render.call_count, 2)
 
         # Clean up
         os.remove(dummy_image_path)

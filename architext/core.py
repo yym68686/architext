@@ -21,10 +21,10 @@ class ContextProvider(ABC):
     def mark_stale(self): self._is_stale = True
     async def refresh(self):
         if self._is_stale:
-            self._cached_content = await self._fetch_content()
+            self._cached_content = await self.render()
             self._is_stale = False
     @abstractmethod
-    async def _fetch_content(self) -> Optional[str]: raise NotImplementedError
+    async def render(self) -> Optional[str]: raise NotImplementedError
     @abstractmethod
     def update(self, *args, **kwargs): raise NotImplementedError
     def get_content_block(self) -> Optional[ContentBlock]:
@@ -45,14 +45,14 @@ class Texts(ContextProvider):
         self._text = text
         self.mark_stale()
 
-    async def _fetch_content(self) -> str: return self._text
+    async def render(self) -> str: return self._text
 
 class Tools(ContextProvider):
     def __init__(self, tools_json: List[Dict]): super().__init__("tools"); self._tools_json = tools_json
     def update(self, tools_json: List[Dict]):
         self._tools_json = tools_json
         self.mark_stale()
-    async def _fetch_content(self) -> str: return f"<tools>{str(self._tools_json)}</tools>"
+    async def render(self) -> str: return f"<tools>{str(self._tools_json)}</tools>"
 
 class Files(ContextProvider):
     def __init__(self, *paths: Union[str, List[str]]):
@@ -79,7 +79,7 @@ class Files(ContextProvider):
                     logging.error(f"Error reading file {path} during initialization: {e}")
 
     def update(self, path: str, content: str): self._files[path] = content; self.mark_stale()
-    async def _fetch_content(self) -> str:
+    async def render(self) -> str:
         if not self._files: return None
         return "<latest_file_content>" + "\n".join([f"<file><file_path>{p}</file_path><file_content>{c}</file_content></file>" for p, c in self._files.items()]) + "\n</latest_file_content>"
 
@@ -90,7 +90,7 @@ class Images(ContextProvider):
     def update(self, url: str):
         self.url = url
         self.mark_stale()
-    async def _fetch_content(self) -> Optional[str]:
+    async def render(self) -> Optional[str]:
         if self.url.startswith("data:"):
             return self.url
         try:
