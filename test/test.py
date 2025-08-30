@@ -589,6 +589,73 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(providers_final[0].get_content_block().content, "hi")
         self.assertEqual(providers_final[1].get_content_block().content, "hello")
 
+    async def test_s_len_and_pop_with_get_method(self):
+        """测试 len() 功能和 pop() 返回的对象支持 .get('role')"""
+        messages = Messages(
+            SystemMessage("System prompt"),
+            UserMessage("User question"),
+            AssistantMessage("Assistant answer")
+        )
+
+        # 1. 测试 len()
+        self.assertEqual(len(messages), 3, "len(messages) 应该返回消息的数量")
+
+        # 2. 弹出中间的消息
+        popped_message = messages.pop(1)
+        self.assertIsNotNone(popped_message, "pop(1) 应该返回一个消息对象")
+        self.assertIsInstance(popped_message, UserMessage)
+
+        # 3. 验证弹出的消息
+        # 这行会失败，因为 Message 对象没有 get 方法
+        self.assertEqual(popped_message.get("role"), "user", "弹出的消息应该可以通过 .get('role') 获取角色")
+
+        # 4. 验证 pop 后的状态
+        self.assertEqual(len(messages), 2, "pop() 后消息数量应该减少")
+        self.assertEqual(messages[0].role, "system")
+        self.assertEqual(messages[1].role, "assistant")
+
+        # 5. 测试 .get() 对不存在的键返回默认值
+        self.assertIsNone(popped_message.get("non_existent_key"), ".get() 对不存在的键应该返回 None")
+        self.assertEqual(popped_message.get("non_existent_key", "default"), "default", ".get() 应支持默认值")
+
+    async def test_t_pop_and_get_tool_calls(self):
+        """测试弹出 ToolCalls 消息后，可以通过 .get('tool_calls') 访问其内容"""
+        from dataclasses import dataclass, field
+        @dataclass
+        class MockFunction:
+            name: str
+            arguments: str
+
+        @dataclass
+        class MockToolCall:
+            id: str
+            type: str = "function"
+            function: MockFunction = field(default_factory=lambda: MockFunction("", ""))
+
+        tool_call_list = [MockToolCall(id="call_123", function=MockFunction(name="test", arguments="{}"))]
+
+        messages = Messages(
+            UserMessage("A regular message"),
+            ToolCalls(tool_calls=tool_call_list)
+        )
+
+        # 1. 弹出 ToolCalls 消息
+        popped_tool_call_message = messages.pop(1)
+        self.assertIsInstance(popped_tool_call_message, ToolCalls)
+
+        # 2. 验证 .get("tool_calls")
+        retrieved_tool_calls = popped_tool_call_message.get("tool_calls")
+        self.assertIsNotNone(retrieved_tool_calls)
+        self.assertEqual(len(retrieved_tool_calls), 1)
+        self.assertIs(retrieved_tool_calls, tool_call_list)
+
+        # 3. 弹出普通消息
+        popped_user_message = messages.pop(0)
+        self.assertIsInstance(popped_user_message, UserMessage)
+
+        # 4. 验证 .get("tool_calls") 在普通消息上返回 None
+        self.assertIsNone(popped_user_message.get("tool_calls"), "在没有 tool_calls 属性的消息上 .get() 应该返回 None")
+
 
 # ==============================================================================
 # 6. 演示

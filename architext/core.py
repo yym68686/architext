@@ -159,6 +159,9 @@ class Message(ABC):
     def __repr__(self): return f"Message(role='{self.role}', items={[i.name for i in self._items]})"
     def __bool__(self) -> bool:
         return bool(self._items)
+    def get(self, key: str, default: Any = None) -> Any:
+        """提供类似字典的 .get() 方法来访问属性。"""
+        return getattr(self, key, default)
     def to_dict(self) -> Optional[Dict[str, Any]]:
         is_multimodal = any(isinstance(p, Images) for p in self._items)
 
