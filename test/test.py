@@ -17,7 +17,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         """在每个测试前设置环境"""
-        self.system_prompt_provider = Texts("system_prompt", "你是一个AI助手。")
+        self.system_prompt_provider = Texts("你是一个AI助手。", name="system_prompt")
         self.tools_provider = Tools(tools_json=[{"name": "read_file"}])
         self.files_provider = Files()
 
@@ -402,7 +402,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(text_provider_1.name.startswith("text_"))
 
         # 2. 提供 name
-        text_provider_2 = Texts("my_name", "This is another test.")
+        text_provider_2 = Texts("This is another test.", name="my_name")
         self.assertEqual(text_provider_2.name, "my_name")
 
         # 3. 验证相同内容的文本生成相同的 name
@@ -503,12 +503,28 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             UserMessage(invalid_list)
 
+    async def test_p_empty_message_boolean_context(self):
+        """测试一个空的 Message 对象在布尔上下文中是否为 False"""
+        # 1. 创建一个不含任何 provider 的空 UserMessage
+        empty_message = UserMessage()
+        self.assertFalse(empty_message, "一个空的 UserMessage 在布尔上下文中应该为 False")
+
+        # 2. 创建一个包含 provider 的 UserMessage
+        non_empty_message = UserMessage("Hello")
+        self.assertTrue(non_empty_message, "一个非空的 UserMessage 在布尔上下文中应该为 True")
+
+        # 3. 测试一个 provider 被移除后变为空消息的情况
+        message_to_be_emptied = UserMessage(Texts("content", name="removable"))
+        self.assertTrue(message_to_be_emptied, "消息在移除前应为 True")
+        message_to_be_emptied.pop("removable")
+        self.assertFalse(message_to_be_emptied, "消息在最后一个 provider 被移除后应为 False")
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================
 async def run_demo():
     # --- 1. 初始化提供者 ---
-    system_prompt_provider = Texts("system_prompt", "你是一个AI助手。")
+    system_prompt_provider = Texts("你是一个AI助手。", name="system_prompt")
     tools_provider = Tools(tools_json=[{"name": "read_file"}])
     files_provider = Files()
 

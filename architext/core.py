@@ -32,16 +32,14 @@ class ContextProvider(ABC):
         return None
 
 class Texts(ContextProvider):
-    def __init__(self, name_or_text: str, text: Optional[str] = None):
-        if text is None:
-            _text = name_or_text
-            h = hashlib.sha1(_text.encode()).hexdigest()
+    def __init__(self, text: str, name: Optional[str] = None):
+        self._text = text
+        if name is None:
+            h = hashlib.sha1(self._text.encode()).hexdigest()
             _name = f"text_{h[:8]}"
         else:
-            _name = name_or_text
-            _text = text
+            _name = name
         super().__init__(_name)
-        self._text = _text
 
     def update(self, text: str):
         self._text = text
@@ -90,7 +88,7 @@ class Message(ABC):
         processed_items = []
         for item in initial_items:
             if isinstance(item, str):
-                processed_items.append(Texts(item))
+                processed_items.append(Texts(text=item))
             elif isinstance(item, ContextProvider):
                 processed_items.append(item)
             elif isinstance(item, list):
@@ -100,7 +98,7 @@ class Message(ABC):
 
                     item_type = sub_item['type']
                     if item_type == 'text':
-                        processed_items.append(Texts(sub_item.get('text', '')))
+                        processed_items.append(Texts(text=sub_item.get('text', '')))
                     elif item_type == 'image_url':
                         image_url = sub_item.get('image_url', {}).get('url')
                         if image_url:
@@ -138,6 +136,8 @@ class Message(ABC):
 
     def providers(self) -> List[ContextProvider]: return self._items
     def __repr__(self): return f"Message(role='{self.role}', items={[i.name for i in self._items]})"
+    def __bool__(self) -> bool:
+        return bool(self._items)
     def to_dict(self) -> Optional[Dict[str, Any]]:
         is_multimodal = any(isinstance(p, Images) for p in self._items)
 
