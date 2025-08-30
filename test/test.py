@@ -1053,6 +1053,54 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         self.assertEqual(len(rendered_visible_again), 1)
         self.assertEqual(rendered_visible_again[0]['content'], "Hello, World!")
 
+    async def test_z8_bulk_provider_visibility_control(self):
+        """测试通过名称批量控制和豁免provider的可见性"""
+        # 1. 创建多个同名 provider
+        messages = Messages(
+            UserMessage(
+                Texts("First explanation.", name="explanation"),
+                Texts("Second explanation.", name="explanation"),
+                Texts("Some other text."),
+                Texts("Third explanation.", name="explanation")
+            )
+        )
+
+        # 2. 初始渲染，所有 "explanation" 都应该可见
+        rendered_initial = await messages.render_latest()
+        self.assertIn("First explanation.", rendered_initial[0]['content'])
+        self.assertIn("Second explanation.", rendered_initial[0]['content'])
+        self.assertIn("Third explanation.", rendered_initial[0]['content'])
+
+        # 3. 获取所有名为 "explanation" 的 provider
+        explanation_providers = messages.provider("explanation")
+        self.assertIsInstance(explanation_providers, ProviderGroup)
+        self.assertEqual(len(explanation_providers), 3)
+
+        # 4. 将所有 "explanation" provider 设置为不可见
+        # 这是需要实现的新语法
+        explanation_providers.visible = False
+        for p in explanation_providers:
+             self.assertFalse(p.visible)
+
+        # 5. 渲染，所有 "explanation" 的内容都应该消失
+        rendered_hidden = await messages.render_latest()
+        self.assertNotIn("First explanation.", rendered_hidden[0]['content'])
+        self.assertNotIn("Second explanation.", rendered_hidden[0]['content'])
+        self.assertNotIn("Third explanation.", rendered_hidden[0]['content'])
+        self.assertIn("Some other text.", rendered_hidden[0]['content'])
+
+        # 6. 将最后一个 "explanation" provider 设置回可见
+        # 这是需要实现的另一个新语法
+        explanation_providers[-1].visible = True
+        self.assertTrue(explanation_providers[-1].visible)
+        self.assertFalse(explanation_providers[0].visible)
+
+        # 7. 最终渲染，只应看到最后一个 "explanation"
+        rendered_final = await messages.render_latest()
+        self.assertNotIn("First explanation.", rendered_final[0]['content'])
+        self.assertNotIn("Second explanation.", rendered_final[0]['content'])
+        self.assertIn("Third explanation.", rendered_final[0]['content'])
+        self.assertIn("Some other text.", rendered_final[0]['content'])
 
 # ==============================================================================
 # 6. 演示

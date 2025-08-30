@@ -10,6 +10,30 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Union, Callable
 
+# A wrapper to manage multiple providers with the same name
+class ProviderGroup:
+    """A container for multiple providers that share the same name, allowing for bulk operations."""
+    def __init__(self, providers: List['ContextProvider']):
+        self._providers = providers
+    def __getitem__(self, key: int) -> 'ContextProvider':
+        """Allows accessing providers by index, e.g., group[-1]."""
+        return self._providers[key]
+    def __iter__(self):
+        """Allows iterating over the providers."""
+        return iter(self._providers)
+    def __len__(self) -> int:
+        """Returns the number of providers in the group."""
+        return len(self._providers)
+    @property
+    def visible(self) -> List[bool]:
+        """Gets the visibility of all providers in the group."""
+        return [p.visible for p in self._providers]
+    @visible.setter
+    def visible(self, value: bool):
+        """Sets the visibility for all providers in the group."""
+        for p in self._providers:
+            p.visible = value
+
 # Global, thread-safe registry for providers created within f-strings
 _fstring_provider_registry = {}
 _registry_lock = threading.Lock()
@@ -436,22 +460,40 @@ class Messages:
     def __init__(self, *initial_messages: Message):
         from typing import Tuple
         self._messages: List[Message] = []
-        self._providers_index: Dict[str, Tuple[ContextProvider, Message]] = {}
+        self._providers_index: Dict[str, List[Tuple[ContextProvider, Message]]] = {}
         if initial_messages:
             for msg in initial_messages:
                 self.append(msg)
 
     def _notify_provider_added(self, provider: ContextProvider, message: Message):
         if provider.name not in self._providers_index:
-            self._providers_index[provider.name] = (provider, message)
+            self._providers_index[provider.name] = []
+        self._providers_index[provider.name].append((provider, message))
 
     def _notify_provider_removed(self, provider: ContextProvider):
         if provider.name in self._providers_index:
-            del self._providers_index[provider.name]
+            # Create a new list excluding the provider to be removed.
+            # Comparing by object identity (`is`) is crucial here.
+            providers_list = self._providers_index[provider.name]
+            new_list = [(p, m) for p, m in providers_list if p is not provider]
 
-    def provider(self, name: str) -> Optional[ContextProvider]:
-        indexed = self._providers_index.get(name)
-        return indexed[0] if indexed else None
+            if not new_list:
+                # If the list becomes empty, remove the key from the dictionary.
+                del self._providers_index[provider.name]
+            else:
+                # Otherwise, update the dictionary with the new list.
+                self._providers_index[provider.name] = new_list
+
+    def provider(self, name: str) -> Optional[Union[ContextProvider, ProviderGroup]]:
+        indexed_list = self._providers_index.get(name)
+        if not indexed_list:
+            return None
+
+        providers = [p for p, m in indexed_list]
+        if len(providers) == 1:
+            return providers[0]
+        else:
+            return ProviderGroup(providers)
 
     def pop(self, key: Optional[Union[str, int]] = None) -> Union[Optional[ContextProvider], Optional[Message]]:
         # If no key is provided, pop the last message.
@@ -459,10 +501,13 @@ class Messages:
             key = len(self._messages) - 1
 
         if isinstance(key, str):
-            indexed = self._providers_index.get(key)
-            if not indexed:
+            indexed_list = self._providers_index.get(key)
+            if not indexed_list:
                 return None
-            _provider, parent_message = indexed
+            # Pop the first one found, which is consistent with how pop usually works
+            _provider, parent_message = indexed_list[0]
+            # The actual removal from _providers_index happens in _notify_provider_removed
+            # which is called by message.pop()
             return parent_message.pop(key)
         elif isinstance(key, int):
             try:
@@ -481,7 +526,10 @@ class Messages:
         return None
 
     async def refresh(self):
-        tasks = [provider.refresh() for provider, _ in self._providers_index.values()]
+        tasks = []
+        for provider_list in self._providers_index.values():
+            for provider, _ in provider_list:
+                tasks.append(provider.refresh())
         await asyncio.gather(*tasks)
 
     def render(self) -> List[Dict[str, Any]]:
