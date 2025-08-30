@@ -4,9 +4,27 @@ import asyncio
 import logging
 import hashlib
 import mimetypes
+import uuid
+import threading
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Union, Callable
+
+# Global, thread-safe registry for providers created within f-strings
+_fstring_provider_registry = {}
+_registry_lock = threading.Lock()
+
+def _register_provider(provider: 'ContextProvider') -> str:
+    """Registers a provider and returns a unique placeholder."""
+    with _registry_lock:
+        provider_id = f"__provider_placeholder_{uuid.uuid4().hex}__"
+        _fstring_provider_registry[provider_id] = provider
+        return provider_id
+
+def _retrieve_provider(placeholder: str) -> Optional['ContextProvider']:
+    """Retrieves a provider from the registry."""
+    with _registry_lock:
+        return _fstring_provider_registry.pop(placeholder, None)
 
 # 1. 核心数据结构: ContentBlock
 @dataclass
@@ -18,6 +36,11 @@ class ContentBlock:
 class ContextProvider(ABC):
     def __init__(self, name: str):
         self.name = name; self._cached_content: Optional[str] = None; self._is_stale: bool = True
+
+    def __str__(self):
+        # This allows the object to be captured when used inside an f-string.
+        return _register_provider(self)
+
     def mark_stale(self): self._is_stale = True
     async def refresh(self):
         if self._is_stale:
@@ -184,7 +207,23 @@ class Message(ABC):
         processed_items = []
         for item in initial_items:
             if isinstance(item, str):
-                processed_items.append(Texts(text=item))
+                # Check if the string contains placeholders from f-string rendering
+                import re
+                placeholder_pattern = re.compile(r'(__provider_placeholder_[a-f0-9]{32}__)')
+                parts = placeholder_pattern.split(item)
+
+                if len(parts) > 1: # Placeholders were found
+                    for part in parts:
+                        if not part: continue
+                        if placeholder_pattern.match(part):
+                            provider = _retrieve_provider(part)
+                            if provider:
+                                processed_items.append(provider)
+                        else:
+                            processed_items.append(Texts(text=part))
+                else: # No placeholders, just a regular string
+                    processed_items.append(Texts(text=item))
+
             elif isinstance(item, Message):
                 processed_items.extend(item.providers())
             elif isinstance(item, ContextProvider):
@@ -209,37 +248,13 @@ class Message(ABC):
         self._parent_messages: Optional['Messages'] = None
 
     def _render_content(self) -> str:
-        # Get all blocks and their provider types first
-        blocks_with_types = []
+        final_parts = []
         for item in self._items:
             block = item.get_content_block()
-            if block and (block.content or block.content == ""): # Consider blocks with empty string content
-                # We only care about non-multimodal Texts providers for concatenation
-                provider_type = Texts if type(item) is Texts else type(item)
-                blocks_with_types.append((block, provider_type))
+            if block and block.content is not None:
+                final_parts.append(block.content)
 
-        if not blocks_with_types:
-            return ""
-
-        # Build the final content string
-        # Start with the first block's content
-        final_content_parts = [blocks_with_types[0][0].content]
-
-        for i in range(1, len(blocks_with_types)):
-            current_block, current_type = blocks_with_types[i]
-            _, prev_type = blocks_with_types[i-1]
-
-            # If both the previous and current rendered blocks are simple text, concatenate them.
-            # Otherwise, join with newlines.
-            if prev_type is Texts and current_type is Texts:
-                separator = ""
-            else:
-                separator = "\n\n"
-
-            final_content_parts.append(separator)
-            final_content_parts.append(current_block.content)
-
-        return "".join(final_content_parts)
+        return "".join(final_parts)
 
     def pop(self, name: str) -> Optional[ContextProvider]:
         popped_item = None

@@ -1,6 +1,6 @@
 [project]
 name = "architext"
-version = "0.1.40"
+version = "0.1.41"
 description = "The Context Engineering framework for building smarter, more reliable AI Agents."
 readme = "README.md"
 requires-python = ">=3.11"

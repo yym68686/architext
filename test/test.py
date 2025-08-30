@@ -904,102 +904,99 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(rendered_updated), 1)
         self.assertEqual(rendered_updated[0]['content'], "This is the new content.")
 
-    async def test_z4_fstring_deferred_population(self):
-        """测试 f-string 内容是否可以延迟填充"""
-        # 1. 初始化一个带有 f-string 占位符的 UserMessage
-        # 注意：这里的 f-string 会立即求值，所以我们需要模拟一个假的 Texts 对象
-        # 让它看起来像是 f-string 的一部分。正确的用法是直接在 f-string 中创建 Texts 对象。
-        user_info_provider = Texts(name="user_info")
+    async def test_z4_direct_fstring_usage(self):
+        """直接使用 f-string 语法，并预期其能够被处理"""
 
-        # This is how the user wants to use it. The f-string is evaluated immediately.
-        # The Texts object inside it is created but has no text yet.
-        raw_fstring_text = f"""
-<user_info>
-The user's OS version is {Texts(name="os_version")}. The absolute path of the user's workspace is {Texts(name="workspace_path")} which is also the project root directory. The user's shell is {Texts(name="shell")}.
-</user_info>
-"""
-        # The above f-string evaluates to a string containing reprs of Texts objects.
-        # This is not how the library is designed to work.
-        # A more correct approach is to build the message programmatically.
+        # 这个测试将直接使用用户期望的 f-string 语法。
+        # 由于 Python 的限制，这行代码会立即对 f-string 求值，
+        # 导致 providers 的字符串表示形式（而不是 provider 对象本身）被插入。
+        # 因此，这个测试最初会失败。
+        f_string_message = f"""<user_info>
+The user's OS version is {Texts(name="os_version")}.
+Tools: {Tools()}
+Files: {Files()}
+Current time: {Texts(name="current_time")}
+</user_info>"""
 
-        # Let's test the intended-like usage pattern.
-        # We create a template and providers separately.
+        # 借助新的 f-string 处理机制，UserMessage 现在可以直接消费 f-string 的结果。
+        messages = Messages(UserMessage(f_string_message))
 
-        os_provider = Texts(name="os_version")
-        path_provider = Texts(name="workspace_path")
-        shell_provider = Texts(name="shell")
-
-        messages = Messages(
-            UserMessage(
-                "<user_info>\n"
-                "The user's OS version is ", os_provider, ". The absolute path of the user's workspace is ",
-                path_provider, " which is also the project root directory. The user's shell is ", shell_provider, ".\n"
-                "</user_info>"
-            )
-        )
-
-        # 2. 初始渲染，此时 placeholders 应该为空字符串
+        # 初始渲染时，provider 的内容应该为空
         rendered_initial = await messages.render_latest()
-        expected_initial_content = (
+
+        # With the new simplest rendering logic, the output should match the f-string exactly,
+        # with empty strings for the providers and no leading whitespace.
+        expected_initial = (
             "<user_info>\n"
-            "The user's OS version is . The absolute path of the user's workspace is "
-            " which is also the project root directory. The user's shell is .\n"
+            "The user's OS version is .\n"
+            "Tools: \n"
+            "Files: \n"
+            "Current time: \n"
             "</user_info>"
         )
-        self.assertEqual(rendered_initial[0]['content'], expected_initial_content)
+        self.assertEqual(rendered_initial[0]['content'].strip(), expected_initial.strip())
 
-        # 3. 获取 providers 并更新它们的值
-        messages.provider("os_version").update("macOS 14.5")
-        messages.provider("workspace_path").update("/Users/yanyuming/Downloads/GitHub/architext")
-        messages.provider("shell").update("/bin/zsh")
+        # 现在，尝试通过 provider 更新内容。这应该会成功。
+        messages.provider("os_version").update("TestOS")
+        messages.provider("tools").update([{"name": "test_tool"}])
+        messages.provider("current_time").update("2025-12-25")
 
-        # 4. 再次渲染，验证 placeholders 是否已填充
-        rendered_final = await messages.render_latest()
-        final_content = rendered_final[0]['content']
-
-        self.assertIn("The user's OS version is macOS 14.5.", final_content)
-        self.assertIn("The absolute path of the user's workspace is /Users/yanyuming/Downloads/GitHub/architext which is also the project root directory.", final_content)
-        self.assertIn("The user's shell is /bin/zsh.", final_content)
-
-    async def test_z5_deferred_tools_and_files(self):
-        """测试 Tools 和 Files provider 的延迟填充功能"""
-        # 1. 不带参数初始化 Tools 和 Files
-        tools_provider = Tools()
-        files_provider = Files()
-
-        messages = Messages(
-            SystemMessage(
-                "System prompt",
-                tools_provider,
-                files_provider
-            )
-        )
-
-        # 2. 初始渲染，此时 Tools 和 Files 应该不产生内容
-        rendered_initial = await messages.render_latest()
-        self.assertEqual(len(rendered_initial), 1)
-        self.assertEqual(rendered_initial[0]['content'], "System prompt")
-
-        # 3. 更新 Tools provider
-        messages.provider("tools").update([{"name": "new_tool"}])
-        rendered_with_tools = await messages.render_latest()
-        self.assertIn("<tools>", rendered_with_tools[0]['content'])
-        self.assertIn("new_tool", rendered_with_tools[0]['content'])
-
-        # 4. 更新 Files provider
-        test_file = "test_deferred.txt"
-        with open(test_file, "w") as f:
-            f.write("deferred content")
+        test_file = "fstring_test.txt"
+        with open(test_file, "w") as f: f.write("content from f-string test")
 
         try:
             messages.provider("files").update(test_file)
-            rendered_with_files = await messages.render_latest()
-            self.assertIn("<tools>", rendered_with_files[0]['content']) # tools should still be there
-            self.assertIn("<latest_file_content>", rendered_with_files[0]['content'])
-            self.assertIn("test_deferred.txt", rendered_with_files[0]['content'])
-            self.assertIn("deferred content", rendered_with_files[0]['content'])
+
+            rendered_final = await messages.render_latest()
+            final_content = rendered_final[0]['content']
+
+            # 断言内容已经被成功更新
+            tools_str = "<tools>[{'name': 'test_tool'}]</tools>"
+            files_str = f"<latest_file_content><file><file_path>fstring_test.txt</file_path><file_content>content from f-string test</file_content></file>\n</latest_file_content>"
+
+            expected_final = f"""<user_info>
+The user's OS version is TestOS.
+Tools: {tools_str}
+Files: {files_str}
+Current time: 2025-12-25
+</user_info>"""
+            self.assertEqual(final_content.strip(), expected_final.strip())
         finally:
-            os.remove(test_file)
+            if os.path.exists(test_file):
+                os.remove(test_file)
+
+    async def test_z5_fstring_with_dynamic_lambda(self):
+        """测试 f-string 消息是否支持动态 lambda 函数"""
+        from datetime import datetime
+        import time
+
+        # 这个测试将验证 f-string 是否能正确处理包含 lambda 的动态 provider
+        f_string_message = f"""<user_info>
+The user's OS version is {Texts(name="os_version")}.
+Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
+</user_info>"""
+
+        messages = Messages(UserMessage(f_string_message))
+        messages.provider("os_version").update("TestOS")
+
+        # 第一次渲染
+        rendered1 = await messages.render_latest()
+        content1 = rendered1[0]['content']
+        self.assertIn("TestOS", content1)
+
+        time1_str_part = content1.split("Current time:")[1].strip().split("\n")[0]
+
+
+        # 等待一秒
+        time.sleep(1)
+
+        # 第二次渲染
+        rendered2 = await messages.render_latest()
+        content2 = rendered2[0]['content']
+        time2_str_part = content2.split("Current time:")[1].strip().split("\n")[0]
+
+        # 验证两次渲染的时间戳不同
+        self.assertNotEqual(time1_str_part, time2_str_part, "f-string 中的动态 lambda 内容在两次渲染之间应该更新")
 
 
 # ==============================================================================
