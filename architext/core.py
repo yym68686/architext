@@ -142,6 +142,15 @@ class Texts(ContextProvider):
     async def render(self) -> Optional[str]:
         return self.content
 
+    def __eq__(self, other):
+        if not isinstance(other, Texts):
+            return NotImplemented
+        # If either object is dynamic, they are only equal if they are the exact same object.
+        if self._is_dynamic or (hasattr(other, '_is_dynamic') and other._is_dynamic):
+            return self is other
+        # For static content, compare the actual content.
+        return self.content == other.content
+
 class Tools(ContextProvider):
     def __init__(self, tools_json: Optional[List[Dict]] = None, name: str = "tools"):
         super().__init__(name)
@@ -153,6 +162,11 @@ class Tools(ContextProvider):
         if not self._tools_json:
             return None
         return f"<tools>{str(self._tools_json)}</tools>"
+
+    def __eq__(self, other):
+        if not isinstance(other, Tools):
+            return NotImplemented
+        return self._tools_json == other._tools_json
 
 class Files(ContextProvider):
     def __init__(self, *paths: Union[str, List[str]], name: str = "files"):
@@ -230,6 +244,11 @@ class Files(ContextProvider):
         if not self._files: return None
         return "<latest_file_content>" + "\n".join([f"<file><file_path>{p}</file_path><file_content>{c}</file_content></file>" for p, c in self._files.items()]) + "\n</latest_file_content>"
 
+    def __eq__(self, other):
+        if not isinstance(other, Files):
+            return NotImplemented
+        return self._files == other._files
+
 class Images(ContextProvider):
     def __init__(self, url: str, name: Optional[str] = None):
         super().__init__(name or url)
@@ -249,6 +268,11 @@ class Images(ContextProvider):
         except FileNotFoundError:
             logging.warning(f"Image file not found: {self.url}. Skipping.")
             return None # Or handle error appropriately
+
+    def __eq__(self, other):
+        if not isinstance(other, Images):
+            return NotImplemented
+        return self.url == other.url
 
 # 3. 消息类 (已合并 MessageContent)
 class Message(ABC):
@@ -356,26 +380,36 @@ class Message(ABC):
             return type(self)(*new_items)
         return NotImplemented
 
-    def __getitem__(self, key: str) -> Any:
+    def __getitem__(self, key: Union[str, int]) -> Any:
         """
-        使得 Message 对象支持字典风格的访问 (e.g., message['content'])。
+        使得 Message 对象支持字典风格的访问 (e.g., message['content'])
+        和列表风格的索引访问 (e.g., message[-1])。
         """
-        if key == 'role':
-            return self.role
-        elif key == 'content':
-            # 直接调用 to_dict 并提取 'content'，确保逻辑一致
-            rendered_dict = self.to_dict()
-            return rendered_dict.get('content') if rendered_dict else None
-        # 对于 tool_calls 等特殊属性，也通过 to_dict 获取
-        elif hasattr(self, key):
-            rendered_dict = self.to_dict()
-            if rendered_dict and key in rendered_dict:
-                return rendered_dict[key]
+        if isinstance(key, str):
+            if key == 'role':
+                return self.role
+            elif key == 'content':
+                # 直接调用 to_dict 并提取 'content'，确保逻辑一致
+                rendered_dict = self.to_dict()
+                return rendered_dict.get('content') if rendered_dict else None
+            # 对于 tool_calls 等特殊属性，也通过 to_dict 获取
+            elif hasattr(self, key):
+                rendered_dict = self.to_dict()
+                if rendered_dict and key in rendered_dict:
+                    return rendered_dict[key]
 
-        # 如果在对象本身或其 to_dict() 中都找不到，则引发 KeyError
-        if hasattr(self, key):
-             return getattr(self, key)
-        raise KeyError(f"'{key}'")
+            # 如果在对象本身或其 to_dict() 中都找不到，则引发 KeyError
+            if hasattr(self, key):
+                 return getattr(self, key)
+            raise KeyError(f"'{key}'")
+        elif isinstance(key, int):
+            return self._items[key]
+        else:
+            raise TypeError(f"Message indices must be integers or strings, not {type(key).__name__}")
+
+    def __len__(self) -> int:
+        """返回消息中 provider 的数量。"""
+        return len(self._items)
 
     def __repr__(self): return f"Message(role='{self.role}', items={[i.name for i in self._items]})"
     def __bool__(self) -> bool:

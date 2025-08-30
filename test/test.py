@@ -1136,6 +1136,28 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
             await p.refresh()
         self.assertEqual(role_message.content, "通过工厂创建的内容")
 
+    async def test_za_message_indexing_and_length(self):
+        """测试 Message 对象是否支持通过索引访问 provider 以及获取长度"""
+        # 1. 创建一个 UserMessage
+        mess = UserMessage(
+            Texts("some instruction"),
+            Texts("hi", name="done")
+        )
+
+        # 2. 测试获取长度
+        # 这在实现 __len__ 之前会失败
+        self.assertEqual(len(mess), 2)
+
+        # 3. 测试通过索引访问
+        # 这在修改 __getitem__ 之前会失败
+        self.assertEqual(mess[-1].name, "done")
+        self.assertEqual(mess[0].name, Texts("some instruction").name)
+        self.assertEqual(mess[0], Texts("some instruction"))
+
+        # 4. 测试索引越界
+        with self.assertRaises(IndexError):
+            _ = mess[2]
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================
