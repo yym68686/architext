@@ -101,7 +101,12 @@ class Texts(ContextProvider):
         if text is None and name is None:
             raise ValueError("Either 'text' or 'name' must be provided.")
 
-        self._text = text
+        # Ensure that non-callable inputs are treated as strings
+        if not callable(text):
+            self._text = str(text) if text is not None else None
+        else:
+            self._text = text
+
         self._is_dynamic = callable(self._text)
 
         if name is None:
