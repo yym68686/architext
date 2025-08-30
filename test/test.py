@@ -872,6 +872,33 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         # 5. 验证两次内容不同（因为时间戳变了）
         self.assertNotEqual(content1, content2, "包含静态前缀的动态 provider 内容应该更新")
 
+    async def test_z3_deferred_text_update_via_provider(self):
+        """测试 Texts(name=...) 初始化, 然后通过 provider 更新内容"""
+        # This test is expected to fail with a TypeError on the next line
+        # because the current Texts.__init__ requires 'text'.
+        deferred_text_provider = Texts(name="deferred_content")
+
+        messages = Messages(UserMessage(deferred_text_provider))
+
+        # Initial render: with no text, it should probably render to an empty string.
+        # If there's no content, the message itself might not be rendered.
+        # Let's assume an empty provider results in the message not rendering.
+        await deferred_text_provider.refresh()
+        self.assertIsNone(deferred_text_provider.get_content_block())
+
+        rendered_initial = await messages.render_latest()
+        self.assertEqual(len(rendered_initial), 0)
+
+        # 3. Get provider and update content
+        provider = messages.provider("deferred_content")
+        self.assertIsNotNone(provider)
+        provider.update("This is the new content.")
+
+        # 4. Re-render and validate
+        rendered_updated = await messages.render_latest()
+        self.assertEqual(len(rendered_updated), 1)
+        self.assertEqual(rendered_updated[0]['content'], "This is the new content.")
+
 
 # ==============================================================================
 # 6. 演示

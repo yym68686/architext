@@ -32,7 +32,10 @@ class ContextProvider(ABC):
         return None
 
 class Texts(ContextProvider):
-    def __init__(self, text: Union[str, Callable[[], str]], name: Optional[str] = None):
+    def __init__(self, text: Optional[Union[str, Callable[[], str]]] = None, name: Optional[str] = None):
+        if text is None and name is None:
+            raise ValueError("Either 'text' or 'name' must be provided.")
+
         self._text = text
         self._is_dynamic = callable(self._text)
 
@@ -41,7 +44,8 @@ class Texts(ContextProvider):
                 import uuid
                 _name = f"dynamic_text_{uuid.uuid4().hex[:8]}"
             else:
-                h = hashlib.sha1(self._text.encode()).hexdigest()
+                # Handle the case where text is None during initialization
+                h = hashlib.sha1(self._text.encode() if self._text else b'').hexdigest()
                 _name = f"text_{h[:8]}"
         else:
             _name = name
@@ -57,7 +61,7 @@ class Texts(ContextProvider):
         self._is_dynamic = callable(self._text)
         self.mark_stale()
 
-    async def render(self) -> str:
+    async def render(self) -> Optional[str]:
         if self._is_dynamic:
             return self._text()
         return self._text
