@@ -297,6 +297,16 @@ class Message(ABC):
         self._items: List[ContextProvider] = processed_items
         self._parent_messages: Optional['Messages'] = None
 
+    @property
+    def content(self) -> Optional[Union[str, List[Dict[str, Any]]]]:
+        """
+        Renders the message content.
+        For simple text messages, returns a string.
+        For multimodal messages, returns a list of content blocks.
+        """
+        rendered_dict = self.to_dict()
+        return rendered_dict.get('content') if rendered_dict else None
+
     def _render_content(self) -> str:
         final_parts = []
         for item in self._items:
@@ -444,15 +454,17 @@ class ToolCalls(Message):
 class ToolResults(Message):
     """Represents a tool message with the result of a single tool call."""
     def __init__(self, tool_call_id: str, content: str):
-        super().__init__("tool")
+        # We pass a Texts provider to the parent so it can be rendered,
+        # but the primary way to access content for ToolResults is via its dict representation.
+        super().__init__("tool", Texts(text=content))
         self.tool_call_id = tool_call_id
-        self.content = content
+        self._content = content
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "role": self.role,
             "tool_call_id": self.tool_call_id,
-            "content": self.content
+            "content": self._content
         }
 
 # 4. 顶层容器: Messages

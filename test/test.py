@@ -1102,6 +1102,40 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         self.assertIn("Third explanation.", rendered_final[0]['content'])
         self.assertIn("Some other text.", rendered_final[0]['content'])
 
+    async def test_z9_rolemessage_content_access(self):
+        """测试是否支持 RoleMessage.content 来访问渲染好的内容"""
+        # 1. 创建一个简单的 UserMessage
+        user_message = UserMessage("你好, Architext!")
+        # 对于简单的 Texts, refresh 不是必须的, 但这是个好习惯
+        # Message 类本身没有 refresh, 调用其 providers 的 refresh
+        for p in user_message.providers():
+            await p.refresh()
+
+        # 2. 直接访问 .content 属性
+        # 在实现该功能前，这行代码会因 AttributeError 而失败
+        self.assertEqual(user_message.content, "你好, Architext!")
+
+        # 3. 创建一个多模态消息
+        multimodal_message = AssistantMessage(
+            "这是一张图片:",
+            Images(url="data:image/png;base64,FAKE_IMG_DATA")
+        )
+        for p in multimodal_message.providers():
+            await p.refresh()
+
+        # 4. 访问多模态消息的 .content 属性，期望返回一个列表
+        content_list = multimodal_message.content
+        self.assertIsInstance(content_list, list)
+        self.assertEqual(len(content_list), 2)
+        self.assertEqual(content_list[0]['type'], 'text')
+        self.assertEqual(content_list[1]['type'], 'image_url')
+
+        # 5. 测试通过 RoleMessage 工厂创建的消息
+        role_message = RoleMessage('user', "通过工厂创建的内容")
+        for p in role_message.providers():
+            await p.refresh()
+        self.assertEqual(role_message.content, "通过工厂创建的内容")
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================
