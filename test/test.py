@@ -961,6 +961,46 @@ The user's OS version is {Texts(name="os_version")}. The absolute path of the us
         self.assertIn("The absolute path of the user's workspace is /Users/yanyuming/Downloads/GitHub/architext which is also the project root directory.", final_content)
         self.assertIn("The user's shell is /bin/zsh.", final_content)
 
+    async def test_z5_deferred_tools_and_files(self):
+        """测试 Tools 和 Files provider 的延迟填充功能"""
+        # 1. 不带参数初始化 Tools 和 Files
+        tools_provider = Tools()
+        files_provider = Files()
+
+        messages = Messages(
+            SystemMessage(
+                "System prompt",
+                tools_provider,
+                files_provider
+            )
+        )
+
+        # 2. 初始渲染，此时 Tools 和 Files 应该不产生内容
+        rendered_initial = await messages.render_latest()
+        self.assertEqual(len(rendered_initial), 1)
+        self.assertEqual(rendered_initial[0]['content'], "System prompt")
+
+        # 3. 更新 Tools provider
+        messages.provider("tools").update([{"name": "new_tool"}])
+        rendered_with_tools = await messages.render_latest()
+        self.assertIn("<tools>", rendered_with_tools[0]['content'])
+        self.assertIn("new_tool", rendered_with_tools[0]['content'])
+
+        # 4. 更新 Files provider
+        test_file = "test_deferred.txt"
+        with open(test_file, "w") as f:
+            f.write("deferred content")
+
+        try:
+            messages.provider("files").update(test_file)
+            rendered_with_files = await messages.render_latest()
+            self.assertIn("<tools>", rendered_with_files[0]['content']) # tools should still be there
+            self.assertIn("<latest_file_content>", rendered_with_files[0]['content'])
+            self.assertIn("test_deferred.txt", rendered_with_files[0]['content'])
+            self.assertIn("deferred content", rendered_with_files[0]['content'])
+        finally:
+            os.remove(test_file)
+
 
 # ==============================================================================
 # 6. 演示
