@@ -377,6 +377,23 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         rendered_updated = await messages.render_latest()
         self.assertEqual(rendered_updated[0]['content'][1]['image_url']['url'], new_base64_url)
 
+    def test_l_role_message_factory(self):
+        """测试 RoleMessage 工厂类是否能创建正确的子类实例"""
+        system_msg = RoleMessage('system', Texts("test", "System content"))
+        user_msg = RoleMessage('user', Texts("test", "User content"))
+        assistant_msg = RoleMessage('assistant', Texts("test", "Assistant content"))
+
+        self.assertIsInstance(system_msg, SystemMessage)
+        self.assertEqual(system_msg.role, 'system')
+        self.assertIsInstance(user_msg, UserMessage)
+        self.assertEqual(user_msg.role, 'user')
+        self.assertIsInstance(assistant_msg, AssistantMessage)
+        self.assertEqual(assistant_msg.role, 'assistant')
+
+        # 测试无效的 role
+        with self.assertRaises(ValueError):
+            RoleMessage('invalid_role', Texts("test", "Content"))
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================

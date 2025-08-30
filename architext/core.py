@@ -130,6 +130,18 @@ class UserMessage(Message):
 class AssistantMessage(Message):
     def __init__(self, *items): super().__init__("assistant", *items)
 
+class RoleMessage:
+    """A factory class that creates a specific message type based on the role."""
+    def __new__(cls, role: str, *items):
+        if role == 'system':
+            return SystemMessage(*items)
+        elif role == 'user':
+            return UserMessage(*items)
+        elif role == 'assistant':
+            return AssistantMessage(*items)
+        else:
+            raise ValueError(f"Invalid role: {role}. Must be 'system', 'user', or 'assistant'.")
+
 class ToolCalls(Message):
     """Represents an assistant message that requests tool calls."""
     def __init__(self, tool_calls: List[Any]):
