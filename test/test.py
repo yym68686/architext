@@ -309,6 +309,36 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         os.remove(dummy_image_path)
         os.remove(new_dummy_image_path)
 
+    async def test_j_pop_last_message_without_arguments(self):
+        """测试不带参数调用 pop() 时，弹出最后一个 Message"""
+        m1 = SystemMessage(Texts("system", "System"))
+        m2 = UserMessage(Texts("user", "User"))
+        m3 = AssistantMessage(Texts("assistant", "Assistant"))
+        messages = Messages(m1, m2, m3)
+
+        self.assertEqual(len(messages), 3)
+
+        # Pop the last message
+        popped_message = messages.pop()
+
+        self.assertIs(popped_message, m3)
+        self.assertEqual(len(messages), 2)
+        self.assertIs(messages[-1], m2)
+
+        # Pop again
+        popped_message_2 = messages.pop()
+        self.assertIs(popped_message_2, m2)
+        self.assertEqual(len(messages), 1)
+
+        # Pop the last one
+        popped_message_3 = messages.pop()
+        self.assertIs(popped_message_3, m1)
+        self.assertEqual(len(messages), 0)
+
+        # Pop from empty
+        popped_none = messages.pop()
+        self.assertIsNone(popped_none)
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================

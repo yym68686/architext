@@ -194,7 +194,11 @@ class Messages:
         indexed = self._providers_index.get(name)
         return indexed[0] if indexed else None
 
-    def pop(self, key: Union[str, int]) -> Union[Optional[ContextProvider], Optional[Message]]:
+    def pop(self, key: Optional[Union[str, int]] = None) -> Union[Optional[ContextProvider], Optional[Message]]:
+        # If no key is provided, pop the last message.
+        if key is None:
+            key = len(self._messages) - 1
+
         if isinstance(key, str):
             indexed = self._providers_index.get(key)
             if not indexed:
@@ -203,6 +207,10 @@ class Messages:
             return parent_message.pop(key)
         elif isinstance(key, int):
             try:
+                if key < 0: # Handle negative indices like -1
+                    key += len(self._messages)
+                if not (0 <= key < len(self._messages)):
+                    return None
                 popped_message = self._messages.pop(key)
                 popped_message._parent_messages = None
                 for provider in popped_message.providers():
