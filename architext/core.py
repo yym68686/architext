@@ -1,3 +1,4 @@
+import pickle
 import base64
 import asyncio
 import logging
@@ -223,6 +224,31 @@ class Messages:
             self._messages.append(message)
             for p in message.providers():
                 self._notify_provider_added(p, message)
+
+    def save(self, file_path: str):
+        """
+        Saves the entire Messages object to a file using pickle.
+        Warning: Deserializing data with pickle from an untrusted source is insecure.
+        """
+        with open(file_path, 'wb') as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, file_path: str) -> Optional['Messages']:
+        """
+        Loads a Messages object from a file using pickle.
+        Returns the loaded object, or None if the file is not found or an error occurs.
+        Warning: Only load files from a trusted source.
+        """
+        try:
+            with open(file_path, 'rb') as f:
+                return pickle.load(f)
+        except FileNotFoundError:
+            logging.warning(f"File not found at {file_path}, returning empty Messages.")
+            return cls()
+        except (pickle.UnpicklingError, EOFError) as e:
+            logging.error(f"Could not deserialize file {file_path}: {e}")
+            return cls()
 
     def __getitem__(self, index: int) -> Message: return self._messages[index]
     def __len__(self) -> int: return len(self._messages)
