@@ -108,3 +108,39 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+"""
+[
+  {
+    "role": "system",
+    "content": "You are a helpful assistant. You must use the provided tools to answer questions."
+  },
+  {
+    "role": "user",
+    "content": "What is the sum of 5 and 10?"
+  },
+  {
+    "role": "assistant",
+    "tool_calls": [
+      {
+        "id": "call_rddWXkDikIxllRgbPrR6XjtMVSBPv",
+        "type": "function",
+        "function": {
+          "name": "add",
+          "arguments": "{\"b\": 10, \"a\": 5}"
+        }
+      }
+    ],
+    "content": null
+  },
+  {
+    "role": "tool",
+    "tool_call_id": "call_rddWXkDikIxllRgbPrR6XjtMVSBPv",
+    "content": "15"
+  },
+  {
+    "role": "assistant",
+    "content": "The sum of 5 and 10 is 15."
+  }
+]
+"""
