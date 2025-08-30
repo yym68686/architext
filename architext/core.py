@@ -78,6 +78,51 @@ class Files(ContextProvider):
                 except Exception as e:
                     logging.error(f"Error reading file {path} during initialization: {e}")
 
+    def reload(self, path: Optional[str] = None) -> bool:
+        """
+        Reloads file contents from disk.
+
+        If a path is provided, it reloads that specific file.
+        If no path is provided, it reloads all files currently tracked by the provider.
+
+        Args:
+            path (Optional[str]): The path to the file to reload. Defaults to None.
+
+        Returns:
+            bool: True if all requested reloads were successful, False otherwise.
+        """
+        paths_to_reload = []
+        if path:
+            if path in self._files:
+                paths_to_reload.append(path)
+            else:
+                logging.warning(f"Path '{path}' not tracked by this Files provider. Cannot reload.")
+                return False
+        else:
+            paths_to_reload = list(self._files.keys())
+
+        if not paths_to_reload:
+            logging.info("No files to reload.")
+            return True
+
+        success = True
+        for p in paths_to_reload:
+            try:
+                with open(p, 'r', encoding='utf-8') as f:
+                    self._files[p] = f.read()
+                logging.info(f"Successfully reloaded file: {p}")
+            except FileNotFoundError:
+                logging.error(f"File not found during reload: {p}. Keeping stale content.")
+                success = False
+            except Exception as e:
+                logging.error(f"Error reloading file {p}: {e}. Keeping stale content.")
+                success = False
+
+        if success:
+            self.mark_stale()
+
+        return success
+
     def update(self, path: str, content: str): self._files[path] = content; self.mark_stale()
     async def render(self) -> str:
         if not self._files: return None

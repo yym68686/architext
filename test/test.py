@@ -750,6 +750,68 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
             os.remove(test_file_3)
             os.remove(test_file_4)
 
+    async def test_x_files_provider_reload(self):
+        """测试 Files provider 的 reload 方法（带参数和不带参数）"""
+        # --- Part 1: Test reload with a specific path ---
+        test_file_1 = "test_file_reload_1.txt"
+        initial_content_1 = "Initial content 1."
+        with open(test_file_1, "w", encoding='utf-8') as f:
+            f.write(initial_content_1)
+
+        # --- Part 2: Setup for testing reload without path ---
+        test_file_2 = "test_file_reload_2.txt"
+        initial_content_2 = "Initial content 2."
+        with open(test_file_2, "w", encoding='utf-8') as f:
+            f.write(initial_content_2)
+
+        try:
+            # Initialize with two files
+            files_provider = Files(test_file_1, test_file_2)
+            messages = Messages(UserMessage(files_provider))
+            files_provider.render = AsyncMock(wraps=files_provider.render)
+
+            # Initial render and verification
+            rendered_initial = await messages.render_latest()
+            self.assertEqual(files_provider.render.call_count, 1)
+            self.assertIn(initial_content_1, rendered_initial[0]['content'])
+            self.assertIn(initial_content_2, rendered_initial[0]['content'])
+
+            # --- Test reloading a single file ---
+            updated_content_1 = "Updated content 1."
+            with open(test_file_1, "w", encoding='utf-8') as f:
+                f.write(updated_content_1)
+
+            self.assertTrue(files_provider.reload(test_file_1), "reload(path) should succeed.")
+            rendered_single_reload = await messages.render_latest()
+            self.assertEqual(files_provider.render.call_count, 2)
+            self.assertIn(updated_content_1, rendered_single_reload[0]['content'])
+            self.assertIn(initial_content_2, rendered_single_reload[0]['content']) # File 2 should be unchanged
+
+            # --- Test reloading all files (no argument) ---
+            updated_content_1_again = "Updated content 1 again."
+            updated_content_2 = "Updated content 2."
+            with open(test_file_1, "w", encoding='utf-8') as f:
+                f.write(updated_content_1_again)
+            with open(test_file_2, "w", encoding='utf-8') as f:
+                f.write(updated_content_2)
+
+            self.assertTrue(files_provider.reload(), "reload() without args should succeed.")
+            rendered_all_reload = await messages.render_latest()
+            self.assertEqual(files_provider.render.call_count, 3)
+            self.assertIn(updated_content_1_again, rendered_all_reload[0]['content'])
+            self.assertIn(updated_content_2, rendered_all_reload[0]['content'])
+            self.assertNotIn(initial_content_2, rendered_all_reload[0]['content'])
+
+            # --- Test edge cases ---
+            self.assertFalse(files_provider.reload("non_existent_file.txt"), "Reloading untracked file should fail.")
+
+        finally:
+            # Cleanup
+            if os.path.exists(test_file_1):
+                os.remove(test_file_1)
+            if os.path.exists(test_file_2):
+                os.remove(test_file_2)
+
 
 # ==============================================================================
 # 6. 演示
@@ -851,8 +913,8 @@ async def run_demo():
 
 if __name__ == '__main__':
     # 为了在普通脚本环境中运行，添加这两行
-    suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestContextManagement))
+    loader = unittest.TestLoader()
+    suite = loader.loadTestsFromTestCase(TestContextManagement)
     runner = unittest.TextTestRunner()
     runner.run(suite)
     asyncio.run(run_demo())
