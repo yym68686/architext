@@ -1,4 +1,3 @@
-
 # Architext
 
 [English](./README.md) | [中文](./README_CN.md)
@@ -29,18 +28,23 @@ When building complex AI Agents, the **quality and structure** of the context pr
 
 The core philosophy of `Architext` is to elevate the context construction process from ad-hoc "craftsmanship" to systematic "engineering."
 
-*   **Modularize Context**: Each information source (e.g., file content, tool lists) is an independent `ContextProvider` responsible for producing standardized `ContentBlock`s.
-*   **Messages as Mutable Structures**: Messages are no longer static text but a container of objects that can be manipulated in real-time. You can perform precise `pop`, `insert`, and `append` operations on its internal content blocks as if they were precision components.
+*   **Declarative & Dynamic**: Seamlessly construct prompts with Python's f-strings, embedding dynamic, stateful components directly within your text.
+*   **Context as a Mutable Structure**: Messages are no longer static text but a container of `Provider` objects that can be manipulated in real-time. You can perform precise `pop`, `insert`, `append`, and even slicing operations.
+*   **Granular State Management**: Each piece of context is a `Provider` that can be individually updated, cached, and even hidden from rendering without being removed.
 *   **Think like an Architect**: You can lay out the structure of `SystemMessage` and `UserMessage` as clearly as designing a software architecture, and dynamically adjust it through a unified interface to handle different task scenarios.
 
 ## 🚀 Core Features
 
-*   **Object-Oriented Context Modeling**: Treat `SystemMessage`, `UserMessage`, etc., as first-class, operable citizens.
-*   **Atomic Content Blocks (`ContentBlock`)**: Decompose context into the smallest units that can be independently manipulated and moved.
-*   **List-like Dynamic Operations**: Achieve real-time, precise control over context content using methods like `pop()` and `insert()`.
-*   **Provider-Driven Architecture**: Easily connect to any data source through an extensible `ContextProvider` system.
-*   **Intelligent Caching and On-Demand Refresh**: Built-in efficient caching mechanism that only refreshes when the data source changes, significantly improving performance.
-*   **Unified Pass-Through Interface**: Directly access and control any underlying `ContextProvider` through the top-level `Messages` object for centralized state management.
+*   **Intuitive F-String Integration**: Build complex prompts naturally with f-strings, embedding providers like `Texts()`, `Files()`, and `Tools()` directly.
+*   **Object-Oriented Context Modeling**: Treat `SystemMessage`, `UserMessage`, etc., as first-class, operable Python objects.
+*   **Provider-Driven Architecture**: Extensible `ContextProvider` system (`Texts`, `Files`, `Images`, `Tools`) to connect any data source.
+*   **Dynamic Content with `lambda`**: `Texts(lambda: ...)` providers can execute code to generate content on-the-fly during rendering.
+*   **Powerful List-like Operations**: Manipulate messages with `pop()`, `insert()`, `append()`, indexing (`messages[0]`), and slicing (`messages[1:3]`).
+*   **Visibility Control**: Toggle providers on and off with `.visible = False` without removing them, enabling dynamic context filtering.
+*   **Bulk Operations**: Use `ProviderGroup` to manage multiple providers with the same name simultaneously (e.g., `messages.provider("explanation").visible = False`).
+*   **Intelligent Caching**: Built-in mechanism automatically refreshes content only when the source changes, boosting performance.
+*   **Unified Pass-Through Interface**: Access and update any provider from the top-level `Messages` object via `messages.provider("name")`.
+*   **Native Multimodal Support**: Effortlessly create messages containing both text and images.
 
 ## 📦 Installation
 
@@ -50,187 +54,187 @@ pip install architext
 
 ## 🚀 Quick Start: A Context Engineering Practice
 
-The core of `Architext` lies in its intuitive and flexible API. The following series of independent examples demonstrate how to use it for efficient context engineering.
+The following examples showcase Architext's most powerful features, ordered from the most unique to the foundational.
 
-### Example 1: Basic Layout and Initial Rendering
+### Example 1: The Magic of F-String Prompt Construction (Highlight Feature)
 
-This is the most basic usage. We declaratively build a conversation structure containing `System` and `User` messages.
+Forget manual string joining. Build prompts declaratively and dynamically using the tools you already know and love: f-strings.
 
 ```python
-# --- Example 1: Basic Layout ---
 import asyncio
-from architext import Messages, SystemMessage, UserMessage, Texts, Tools
+from architext import Messages, UserMessage, Texts, Tools, Files
+from datetime import datetime
 
 async def example_1():
-    # 1. Define your context providers
-    tools_provider = Tools(tools_json=[{"name": "run_test"}])
-    system_prompt = Texts("system_prompt", "You are a professional AI code reviewer.")
+    # Define providers that will be embedded in the f-string
+    os_provider = Texts("MacOS Sonoma", name="os_version")
+    tools_provider = Tools([{"name": "read_file"}])
+    files_provider = Files(["main.py", "utils.py"])
+    time_provider = Texts(lambda: datetime.now().isoformat()) # Dynamic content!
 
-    # 2. Declaratively build the message list
-    messages = Messages(
-        SystemMessage(system_prompt, tools_provider),
-        UserMessage(Texts("user_input", "Please help me review the following Python code."))
-    )
+    # Create dummy files for the example
+    with open("main.py", "w") as f: f.write("print('hello')")
+    with open("utils.py", "w") as f: f.write("def helper(): pass")
 
-    # 3. Render the final messages list
-    print("--- Example 1: Render Result ---")
-    # .render_latest() automatically refreshes and then renders
+    # Construct the entire message with a single f-string!
+    # Architext automatically detects and manages the embedded providers.
+    prompt = f"""
+    System Information:
+    - OS: {os_provider}
+    - Time: {time_provider}
+
+    Available Tools: {tools_provider}
+
+    File Contents:
+    {files_provider}
+
+    User Request:
+    Based on the files, what is the primary function of this project?
+    """
+
+    messages = Messages(UserMessage(prompt))
+
+    # Render the fully constructed message
+    print("--- F-String Render Result ---")
     for msg in await messages.render_latest():
-        print(msg)
+        print(msg['content'])
+
+    # Clean up dummy files
+    import os
+    os.remove("main.py")
+    os.remove("utils.py")
 
 asyncio.run(example_1())
 ```
 
-**Expected Output:**
-```
---- Example 1: Render Result ---
-{'role': 'system', 'content': 'You are a professional AI code reviewer.\n\n<tools>[{\'name\': \'run_test\'}]</tools>'}
-{'role': 'user', 'content': 'Please help me review the following Python code.'}
-```
+**Expected Output:** The f-string is fully resolved with content from all providers, including the dynamically generated timestamp and file contents.
 
 ---
 
-### Example 2: Pass-Through Updates and Automatic Refresh
+### Example 2: Dynamic Context Refactoring & Visibility Control
 
-The power of `Architext` is that you can update the underlying context sources at any time, and the system will automatically and efficiently refresh the content on the next render.
+Adapt the context in real-time based on application logic. Here, we move a tool definition and then hide multiple "explanation" providers at once.
 
 ```python
-# --- Example 2: Pass-Through Update ---
 import asyncio
-from architext import Messages, UserMessage, Files
+from architext import Messages, SystemMessage, UserMessage, Texts, Tools
 
 async def example_2():
-    # 1. Initialize a message with a files provider
-    files_provider = Files()
     messages = Messages(
-        UserMessage(files_provider)
+        SystemMessage(
+            Texts("You are an AI assistant.", name="intro"),
+            Tools([{"name": "run_code"}]) # Initially in SystemMessage
+        ),
+        UserMessage(
+            Texts("First explanation.", name="explanation"),
+            Texts("Please run the code.", name="request"),
+            Texts("Second explanation.", name="explanation")
+        )
     )
 
-    # 2. At this moment, the file content is empty, so the render result is an empty list
-    print("--- Initial State (File content is empty) ---")
-    print(await messages.render_latest())
+    # --- Part A: Move a provider ---
+    print(">>> Refactoring: Moving 'tools' to UserMessage for emphasis...")
 
-    # 3. Update the file content via the pass-through interface
-    # This automatically marks the files_provider as "dirty"
-    print("\n>>> Updating files via messages.provider...")
-    file_instance = messages.provider("files")
-    if file_instance:
-        file_instance.update("main.py", "def main():\n    pass")
+    # 1. Globally pop the provider from wherever it is
+    tools_provider = messages.pop("tools")
+    # 2. Insert it into a specific message and position
+    if tools_provider:
+        messages[1].insert(1, tools_provider)
 
-    # 4. Render again, Architext will automatically refresh the dirty provider
-    print("\n--- Render After Update ---")
-    for msg in await messages.render_latest():
-        print(msg)
+    print("\n--- After Moving 'tools' ---")
+    for msg in await messages.render_latest(): print(msg)
+
+    # --- Part B: Bulk-hide providers ---
+    print("\n>>> Hiding all 'explanation' providers...")
+
+    # 1. Get a group of all providers named "explanation"
+    explanation_group = messages.provider("explanation")
+    # 2. Set visibility for the entire group
+    explanation_group.visible = False
+
+    print("\n--- After Hiding Explanations ---")
+    for msg in await messages.render_latest(): print(msg)
 
 asyncio.run(example_2())
 ```
 
-**Expected Output:**
-```
---- Initial State (File content is empty) ---
-[]
-
->>> Updating files via messages.provider...
-
---- Render After Update ---
-{'role': 'user', 'content': "<files>\n<file path='main.py'>def main():\n    pass...</file>\n</files>"}
-```
+**Expected Output:** You will see the `<tools>` block move from the system to the user message. Then, in the final output, the "First explanation" and "Second explanation" texts will disappear, while the rest of the content remains.
 
 ---
 
-### Example 3: Dynamic Context Refactoring (`pop` and `insert`)
+### Example 3: Multimodal and Tool-Use Conversations
 
-This is the core practice of **Context Engineering**. You can dynamically move a content block from one message to another, just like manipulating a list, to adapt to different task requirements.
+Architext natively supports complex message structures required for multimodal interactions and tool-use cycles.
 
 ```python
-# --- Example 3: Dynamic Refactoring ---
 import asyncio
-from architext import Messages, SystemMessage, UserMessage, Texts, Tools
+from architext import Messages, UserMessage, AssistantMessage, Texts, Images, ToolCalls, ToolResults
 
 async def example_3():
-    # 1. Initial layout: tools are in SystemMessage
-    tools_provider = Tools(tools_json=[{"name": "run_test"}])
-    messages = Messages(
-        SystemMessage(tools_provider),
-        UserMessage(Texts("user_input", "Analyze the code and run the tests."))
+    # --- Multimodal Example ---
+    with open("dummy_image.png", "w") as f: f.write("dummy")
+
+    multimodal_messages = Messages(
+        UserMessage(
+            "What is in this image?",
+            Images("dummy_image.png")
+        )
     )
-    print("--- Initial Layout ---")
-    for msg in await messages.render_latest(): print(msg)
+    print("--- Multimodal Render Result ---")
+    for msg in await multimodal_messages.render_latest(): print(msg)
 
-    # 2. Runtime decision: Move the tools context to the user message for stronger instruction
-    print("\n>>> Refactoring context: Moving 'tools' block to UserMessage...")
+    # --- Tool-Use Example ---
+    tool_use_messages = Messages(
+        UserMessage("What is 5 + 10?"),
+        # Represents the model's request to call a tool
+        ToolCalls([{'id': 'call_123', 'type': 'function', 'function': {'name': 'add', 'arguments': '{"a": 5, "b": 10}'}}]),
+        # Represents the result you provide back to the model
+        ToolResults(tool_call_id="call_123", content="15"),
+        AssistantMessage("The sum is 15.")
+    )
+    print("\n--- Tool-Use Render Result ---")
+    for msg in await tool_use_messages.render_latest(): print(msg)
 
-    # a. Globally pop the 'tools' provider from any message
-    popped_tools_provider = messages.pop("tools")
-
-    # b. Precisely locate the UserMessage by index (messages[1]) and insert it
-    if popped_tools_provider:
-        messages[1].insert(0, popped_tools_provider)
-
-    # 3. View the refactored result
-    print("\n--- Final Layout After Refactoring ---")
-    # No refresh needed, so we use the synchronous .render()
-    for msg in messages.render(): print(msg)
+    import os
+    os.remove("dummy_image.png")
 
 asyncio.run(example_3())
 ```
 
-**Expected Output:**
-```
---- Initial Layout ---
-{'role': 'system', 'content': "<tools>[{'name': 'run_test'}]</tools>"}
-{'role': 'user', 'content': 'Analyze the code and run the tests.'}
-
->>> Refactoring context: Moving 'tools' block to UserMessage...
-
---- Final Layout After Refactoring ---
-{'role': 'system', 'content': ''}
-{'role': 'user', 'content': "<tools>[{'name': 'run_test'}]</tools>\n\nAnalyze the code and run the tests."}
-```
-*(Note: The content of SystemMessage becomes empty because its only block was moved, so it might be filtered out in the final rendering)*
+**Expected Output:** Both examples will render into the precise dictionary format expected by modern LLM APIs (like OpenAI's), handling list-based content for multimodal messages and `tool_calls`/`tool` roles correctly.
 
 ---
 
-### Example 4: Multimodal Context (Text + Image)
+### Example 4: Pass-Through Updates and Automatic Refresh
 
-`Architext` natively supports multimodal context construction, automatically formatting the output to match APIs like OpenAI's.
+Update any piece of context from anywhere, and Architext will ensure the changes are reflected in the next render.
 
 ```python
-# --- Example 4: Multimodal ---
 import asyncio
-from architext import Messages, UserMessage, Texts, Images
+from architext import Messages, UserMessage, Files
 
 async def example_4():
-    # Create a dummy image for the example
-    with open("example_image.png", "w") as f: f.write("dummy")
+    # 1. Initialize with a Files provider
+    messages = Messages(UserMessage(Files(name="code_files")))
 
-    messages = Messages(
-        UserMessage(
-            Texts("prompt", "What is in this image?"),
-            Images("example_image.png") # name is optional
-        )
-    )
+    # 2. Initially, content is empty
+    print("--- Initial State (No files loaded) ---")
+    print(await messages.render_latest())
 
-    print("--- Multimodal Render Result ---")
-    for msg in await messages.render_latest():
-        # Hide the long base64 string for readability
-        for part in msg['content']:
-            if part['type'] == 'image_url':
-                part['image_url']['url'] = part['image_url']['url'][:80] + "..."
-        print(msg)
+    # 3. Get a handle to the provider and update it
+    print("\n>>> Updating files via messages.provider('code_files')...")
+    files_provider = messages.provider("code_files")
+    if files_provider:
+        files_provider.update("main.py", "def main():\n    print('Hello')")
 
-    # Clean up the dummy file
-    import os
-    os.remove("example_image.png")
+    # 4. Render again. Architext detects the stale provider and refreshes it.
+    print("\n--- Render After Update ---")
+    for msg in await messages.render_latest(): print(msg)
 
 asyncio.run(example_4())
 ```
 
-**Expected Output:**
-```
---- Multimodal Render Result ---
-{'role': 'user', 'content': [{'type': 'text', 'text': 'What is in this image?'}, {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,ZHVtbXk=...'}}]}
-```
+**Expected Output:** The first render will be empty. After the update, the second render will correctly show the content of `main.py`.
 
 ## 🤝 Contributing
 
