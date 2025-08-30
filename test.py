@@ -217,6 +217,40 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         rendered_content = rendered_messages[0]['content']
         self.assertNotIn("<tools>", rendered_content, "渲染结果中不应再包含 'tools' 的内容，证明数据源已更新")
 
+    async def test_h_pop_message_by_index(self):
+        """测试通过整数索引弹出Message的功能"""
+        messages = Messages(
+            SystemMessage(Texts("system_prompt", "System message")),
+            UserMessage(Texts("user_prompt_1", "User message 1")),
+            AssistantMessage(Texts("assistant_response", "Assistant response"))
+        )
+
+        # 初始状态断言
+        self.assertEqual(len(messages), 3)
+        self.assertIsNotNone(messages.provider("user_prompt_1"))
+
+        # 弹出索引为 1 的 UserMessage
+        popped_message = messages.pop(1)
+
+        # 验证弹出的消息是否正确
+        self.assertIsInstance(popped_message, UserMessage)
+        self.assertEqual(len(popped_message.providers()), 1)
+        self.assertEqual(popped_message.providers()[0].name, "user_prompt_1")
+
+        # 验证 Messages 对象的当前状态
+        self.assertEqual(len(messages), 2)
+        self.assertEqual(messages[0].role, "system")
+        self.assertEqual(messages[1].role, "assistant")
+
+        # 验证 provider 索引是否已更新
+        self.assertIsNone(messages.provider("user_prompt_1"))
+
+        # 测试弹出不存在的索引
+        popped_none = messages.pop(99)
+        self.assertIsNone(popped_none)
+        self.assertEqual(len(messages), 2)
+
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================

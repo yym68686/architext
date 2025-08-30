@@ -4,7 +4,7 @@ import logging
 import mimetypes
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 
 # 1. 核心数据结构: ContentBlock
 @dataclass
@@ -182,12 +182,24 @@ class Messages:
         indexed = self._providers_index.get(name)
         return indexed[0] if indexed else None
 
-    def pop(self, name: str) -> Optional[ContextProvider]:
-        indexed = self._providers_index.get(name)
-        if not indexed:
-            return None
-        _provider, parent_message = indexed
-        return parent_message.pop(name)
+    def pop(self, key: Union[str, int]) -> Union[Optional[ContextProvider], Optional[Message]]:
+        if isinstance(key, str):
+            indexed = self._providers_index.get(key)
+            if not indexed:
+                return None
+            _provider, parent_message = indexed
+            return parent_message.pop(key)
+        elif isinstance(key, int):
+            try:
+                popped_message = self._messages.pop(key)
+                popped_message._parent_messages = None
+                for provider in popped_message.providers():
+                    self._notify_provider_removed(provider)
+                return popped_message
+            except IndexError:
+                return None
+
+        return None
 
     async def refresh(self):
         tasks = [provider.refresh() for provider, _ in self._providers_index.values()]
