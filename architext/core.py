@@ -654,7 +654,7 @@ class Messages:
             with open(file_path, 'rb') as f:
                 return pickle.load(f)
         except FileNotFoundError:
-            logging.warning(f"File not found at {file_path}, returning empty Messages.")
+            # logging.warning(f"File not found at {file_path}, returning empty Messages.")
             return cls()
         except (pickle.UnpicklingError, EOFError) as e:
             logging.error(f"Could not deserialize file {file_path}: {e}")
