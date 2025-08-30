@@ -103,7 +103,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         messages = Messages(
             UserMessage(
                 Texts("prompt", "Describe the image."),
-                Images(dummy_image_path) # Test with optional name
+                Images(url=dummy_image_path) # Test with optional name
             )
         )
 
@@ -135,7 +135,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         messages = Messages(
             UserMessage(
                 Texts("prefix", "Look at this:"),
-                Images(dummy_image_path, name="image"), # Explicit name for popping
+                Images(url=dummy_image_path, name="image"), # Explicit name for popping
                 Texts("suffix", "Any thoughts?")
             )
         )
@@ -266,7 +266,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
         dummy_image_path = "test_dummy_image_3.png"
         with open(dummy_image_path, "w") as f: f.write("dummy content")
-        image_provider = Images(dummy_image_path, "logo")
+        image_provider = Images(url=dummy_image_path, name="logo")
 
         messages = Messages(UserMessage(text_provider, tools_provider, image_provider))
 
@@ -289,7 +289,7 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
 
         new_dummy_image_path = "test_dummy_image_4.png"
         with open(new_dummy_image_path, "w") as f: f.write("new dummy content")
-        image_provider.update(new_dummy_image_path)
+        image_provider.update(url=new_dummy_image_path)
 
         # Calling refresh again should not re-fetch yet because we haven't called messages.refresh()
         await text_provider.refresh()
@@ -338,6 +338,44 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         # Pop from empty
         popped_none = messages.pop()
         self.assertIsNone(popped_none)
+
+    async def test_k_image_provider_with_base64_url(self):
+        """测试 Images provider 是否能正确处理 base64 data URL"""
+        # A simple 1x1 transparent PNG as a base64 string
+        base64_image_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+
+        messages = Messages(
+            UserMessage(
+                Texts("prompt", "This is a base64 image."),
+                Images(url=base64_image_url, name="base64_img")
+            )
+        )
+
+        rendered = await messages.render_latest()
+        self.assertEqual(len(rendered), 1)
+
+        content = rendered[0]['content']
+        self.assertIsInstance(content, list)
+        self.assertEqual(len(content), 2)
+
+        # Check text part
+        self.assertEqual(content[0]['type'], 'text')
+        self.assertEqual(content[0]['text'], 'This is a base64 image.')
+
+        # Check image part
+        image_content = content[1]
+        self.assertEqual(image_content['type'], 'image_url')
+        self.assertEqual(image_content['image_url']['url'], base64_image_url)
+
+        # Also test the update method
+        provider = messages.provider("base64_img")
+        self.assertIsNotNone(provider)
+
+        new_base64_url = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+        provider.update(url=new_base64_url)
+
+        rendered_updated = await messages.render_latest()
+        self.assertEqual(rendered_updated[0]['content'][1]['image_url']['url'], new_base64_url)
 
 # ==============================================================================
 # 6. 演示
@@ -389,7 +427,7 @@ async def run_demo():
     multimodal_message = Messages(
         UserMessage(
             Texts("prompt", "What do you see in this image?"),
-            Images("dummy_image.png")
+            Images(url="dummy_image.png")
         )
     )
     print("\n--- 渲染后的多模态 Message ---")

@@ -52,21 +52,23 @@ class Files(ContextProvider):
         return "<files>\n" + "\n".join([f"<file path='{p}'>{c}...</file>" for p, c in self._files.items()]) + "\n</files>"
 
 class Images(ContextProvider):
-    def __init__(self, image_path: str, name: Optional[str] = None):
-        super().__init__(name or image_path)
-        self.image_path = image_path
-    def update(self, image_path: str):
-        self.image_path = image_path
+    def __init__(self, url: str, name: Optional[str] = None):
+        super().__init__(name or url)
+        self.url = url
+    def update(self, url: str):
+        self.url = url
         self.mark_stale()
     async def _fetch_content(self) -> Optional[str]:
+        if self.url.startswith("data:"):
+            return self.url
         try:
-            with open(self.image_path, "rb") as image_file:
+            with open(self.url, "rb") as image_file:
                 encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-                mime_type, _ = mimetypes.guess_type(self.image_path)
+                mime_type, _ = mimetypes.guess_type(self.url)
                 if not mime_type: mime_type = "application/octet-stream" # Fallback
                 return f"data:{mime_type};base64,{encoded_string}"
         except FileNotFoundError:
-            logging.warning(f"Image file not found: {self.image_path}. Skipping.")
+            logging.warning(f"Image file not found: {self.url}. Skipping.")
             return None # Or handle error appropriately
 
 # 3. 消息类 (已合并 MessageContent)
