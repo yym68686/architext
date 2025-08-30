@@ -55,11 +55,33 @@ class Tools(ContextProvider):
     async def _fetch_content(self) -> str: return f"<tools>{str(self._tools_json)}</tools>"
 
 class Files(ContextProvider):
-    def __init__(self): super().__init__("files"); self._files: Dict[str, str] = {}
+    def __init__(self, *paths: Union[str, List[str]]):
+        super().__init__("files")
+        self._files: Dict[str, str] = {}
+
+        file_paths: List[str] = []
+        if paths:
+            # Handle the case where the first argument is a list of paths, e.g., Files(['a', 'b'])
+            if len(paths) == 1 and isinstance(paths[0], list):
+                file_paths.extend(paths[0])
+            # Handle the case where arguments are individual string paths, e.g., Files('a', 'b')
+            else:
+                file_paths.extend(paths)
+
+        if file_paths:
+            for path in file_paths:
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        self._files[path] = f.read()
+                except FileNotFoundError:
+                    logging.warning(f"File not found during initialization: {path}. Skipping.")
+                except Exception as e:
+                    logging.error(f"Error reading file {path} during initialization: {e}")
+
     def update(self, path: str, content: str): self._files[path] = content; self.mark_stale()
     async def _fetch_content(self) -> str:
         if not self._files: return None
-        return "<files>\n" + "\n".join([f"<file path='{p}'>{c}...</file>" for p, c in self._files.items()]) + "\n</files>"
+        return "<latest_file_content>" + "\n".join([f"<file><file_path>{p}</file_path><file_content>{c}</file_content></file>" for p, c in self._files.items()]) + "\n</latest_file_content>"
 
 class Images(ContextProvider):
     def __init__(self, url: str, name: Optional[str] = None):

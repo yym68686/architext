@@ -686,6 +686,70 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(KeyError):
             _ = user_msg['non_existent_key']
 
+    async def test_v_files_initialization_with_list(self):
+        """测试 Files provider 是否可以使用文件路径列表进行初始化"""
+        # 1. 创建两个虚拟文件
+        test_file_1 = "test_file_1.txt"
+        test_file_2 = "test_file_2.txt"
+        with open(test_file_1, "w") as f:
+            f.write("Content of file 1.")
+        with open(test_file_2, "w") as f:
+            f.write("Content of file 2.")
+
+        # 2. 使用路径列表初始化 Files provider
+        # 这行代码当前会失败，因为 __init__ 不接受参数
+        try:
+            files_provider = Files([test_file_1, test_file_2])
+
+            # 3. 将其放入 Messages 并渲染
+            messages = Messages(UserMessage(files_provider))
+            rendered = await messages.render_latest()
+
+            # 4. 验证渲染结果
+            self.assertEqual(len(rendered), 1)
+            content = rendered[0]['content']
+            self.assertIn("<file_path>test_file_1.txt</file_path>", content)
+            self.assertIn("<file_content>Content of file 1.</file_content>", content)
+            self.assertIn("<file_path>test_file_2.txt</file_path>", content)
+            self.assertIn("<file_content>Content of file 2.</file_content>", content)
+
+        finally:
+            # 5. 清理创建的虚拟文件
+            os.remove(test_file_1)
+            os.remove(test_file_2)
+
+    async def test_w_files_initialization_with_args(self):
+        """测试 Files provider 是否可以使用多个文件路径参数进行初始化"""
+        # 1. 创建两个虚拟文件
+        test_file_3 = "test_file_3.txt"
+        test_file_4 = "test_file_4.txt"
+        with open(test_file_3, "w") as f:
+            f.write("Content of file 3.")
+        with open(test_file_4, "w") as f:
+            f.write("Content of file 4.")
+
+        # 2. 使用多个路径参数初始化 Files provider
+        # 这行代码当前会失败
+        try:
+            files_provider = Files(test_file_3, test_file_4)
+
+            # 3. 将其放入 Messages 并渲染
+            messages = Messages(UserMessage(files_provider))
+            rendered = await messages.render_latest()
+
+            # 4. 验证渲染结果
+            self.assertEqual(len(rendered), 1)
+            content = rendered[0]['content']
+            self.assertIn("<file_path>test_file_3.txt</file_path>", content)
+            self.assertIn("<file_content>Content of file 3.</file_content>", content)
+            self.assertIn("<file_path>test_file_4.txt</file_path>", content)
+            self.assertIn("<file_content>Content of file 4.</file_content>", content)
+
+        finally:
+            # 5. 清理创建的虚拟文件
+            os.remove(test_file_3)
+            os.remove(test_file_4)
+
 
 # ==============================================================================
 # 6. 演示
