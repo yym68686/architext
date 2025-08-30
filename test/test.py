@@ -1217,6 +1217,48 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         self.assertEqual(len(sliced_single), 1)
         self.assertIs(sliced_single[0], m3)
 
+    async def test_zd_slice_assignment(self):
+        """测试 Messages 对象的切片赋值功能"""
+        # 1. Setup initial Messages objects
+        m1 = SystemMessage("1")
+        m2 = UserMessage("2")
+        m3 = AssistantMessage("3")
+        m4 = UserMessage("4")
+        messages1 = Messages(m1, m2, m3, m4)
+
+        m5 = SystemMessage("5")
+        m6 = UserMessage("6")
+        messages2 = Messages(m5, m6)
+
+        # 2. Perform slice assignment
+        # This should replace elements from index 1 onwards in messages1
+        # with all elements from messages2
+        messages1[1:] = messages2
+
+        # 3. Verify the result
+        self.assertEqual(len(messages1), 3) # Should be m1, m5, m6
+        self.assertIs(messages1[0], m1)
+        self.assertIs(messages1[1], m5)
+        self.assertIs(messages1[2], m6)
+
+        # 4. Test assigning from a slice, with different roles to prevent merging
+        messages3 = Messages(UserMessage("A"), AssistantMessage("B"), UserMessage("C"))
+        messages4 = Messages(SystemMessage("X"), AssistantMessage("Y"))
+
+        self.assertEqual(len(messages3), 3) # Verify length before assignment
+
+        messages3[1:2] = messages4[1:] # Replace AssistantMessage("B") with AssistantMessage("Y")
+
+        # We need to refresh to access .content property correctly
+        await messages3.refresh()
+
+        self.assertEqual(len(messages3), 3)
+        self.assertEqual(messages3[0].content, "A")
+        self.assertEqual(messages3[1].content, "Y")
+        self.assertEqual(messages3[2].content, "C")
+        self.assertIsInstance(messages3[1], AssistantMessage)
+
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================

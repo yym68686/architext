@@ -636,5 +636,31 @@ class Messages:
         if isinstance(index, slice):
             return Messages(*self._messages[index])
         return self._messages[index]
+
+    def __setitem__(self, index: slice, value: 'Messages'):
+        if not isinstance(index, slice) or not isinstance(value, Messages):
+            raise TypeError("Unsupported operand type(s) for slice assignment")
+
+        # Basic slice assignment logic.
+        # A more robust implementation would handle step and negative indices.
+        start, stop, step = index.indices(len(self._messages))
+
+        if step != 1:
+            raise ValueError("Slice assignment with step is not supported.")
+
+        # Remove old providers from the index
+        for i in range(start, stop):
+            for provider in self._messages[i].provider():
+                self._notify_provider_removed(provider)
+
+        # Replace the slice in the list
+        self._messages[start:stop] = value._messages
+
+        # Add new providers to the index and set parent
+        for msg in value:
+            msg._parent_messages = self
+            for provider in msg.provider():
+                self._notify_provider_added(provider, msg)
+
     def __len__(self) -> int: return len(self._messages)
     def __iter__(self): return iter(self._messages)
