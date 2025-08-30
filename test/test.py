@@ -1182,6 +1182,41 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         non_existent_provider = message.provider("non_existent")
         self.assertIsNone(non_existent_provider)
 
+    async def test_zc_slicing_support(self):
+        """测试 Messages 对象是否支持切片操作"""
+        m1 = SystemMessage("1")
+        m2 = UserMessage("2")
+        m3 = AssistantMessage("3")
+        m4 = UserMessage("4")
+        messages = Messages(m1, m2, m3, m4)
+
+        # 1. Test basic slicing
+        sliced_messages = messages[1:3]
+        self.assertIsInstance(sliced_messages, Messages)
+        self.assertEqual(len(sliced_messages), 2)
+        self.assertIs(sliced_messages[0], m2)
+        self.assertIs(sliced_messages[1], m3)
+
+        # 2. Test slicing with open end
+        sliced_messages_open = messages[2:]
+        self.assertIsInstance(sliced_messages_open, Messages)
+        self.assertEqual(len(sliced_messages_open), 2)
+        self.assertIs(sliced_messages_open[0], m3)
+        self.assertIs(sliced_messages_open[1], m4)
+
+        # 3. Test slicing with open start
+        sliced_messages_start = messages[:2]
+        self.assertIsInstance(sliced_messages_start, Messages)
+        self.assertEqual(len(sliced_messages_start), 2)
+        self.assertIs(sliced_messages_start[0], m1)
+        self.assertIs(sliced_messages_start[1], m2)
+
+        # 4. Test slicing a single element
+        sliced_single = messages[2:3]
+        self.assertIsInstance(sliced_single, Messages)
+        self.assertEqual(len(sliced_single), 1)
+        self.assertIs(sliced_single[0], m3)
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================

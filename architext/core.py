@@ -632,6 +632,9 @@ class Messages:
             logging.error(f"Could not deserialize file {file_path}: {e}")
             return cls()
 
-    def __getitem__(self, index: int) -> Message: return self._messages[index]
+    def __getitem__(self, index: Union[int, slice]) -> Union[Message, 'Messages']:
+        if isinstance(index, slice):
+            return Messages(*self._messages[index])
+        return self._messages[index]
     def __len__(self) -> int: return len(self._messages)
     def __iter__(self): return iter(self._messages)
