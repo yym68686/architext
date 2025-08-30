@@ -24,16 +24,24 @@ class ContextProvider(ABC):
             self._is_stale = False
     @abstractmethod
     async def _fetch_content(self) -> Optional[str]: raise NotImplementedError
+    @abstractmethod
+    def update(self, *args, **kwargs): raise NotImplementedError
     def get_content_block(self) -> Optional[ContentBlock]:
         if self._cached_content is not None: return ContentBlock(self.name, self._cached_content)
         return None
 
 class Texts(ContextProvider):
     def __init__(self, name: str, text: str): super().__init__(name); self._text = text
+    def update(self, text: str):
+        self._text = text
+        self.mark_stale()
     async def _fetch_content(self) -> str: return self._text
 
 class Tools(ContextProvider):
     def __init__(self, tools_json: List[Dict]): super().__init__("tools"); self._tools_json = tools_json
+    def update(self, tools_json: List[Dict]):
+        self._tools_json = tools_json
+        self.mark_stale()
     async def _fetch_content(self) -> str: return f"<tools>{str(self._tools_json)}</tools>"
 
 class Files(ContextProvider):
@@ -47,6 +55,9 @@ class Images(ContextProvider):
     def __init__(self, image_path: str, name: Optional[str] = None):
         super().__init__(name or image_path)
         self.image_path = image_path
+    def update(self, image_path: str):
+        self.image_path = image_path
+        self.mark_stale()
     async def _fetch_content(self) -> Optional[str]:
         try:
             with open(self.image_path, "rb") as image_file:

@@ -258,6 +258,56 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(popped_none)
         self.assertEqual(len(messages), 2)
 
+    async def test_i_generic_update_and_refresh(self):
+        """测试新添加的 update 方法是否能正确更新内容并标记为 stale"""
+        # 1. Setup providers
+        text_provider = Texts("greet", "Hello")
+        tools_provider = Tools([{"name": "tool_A"}])
+
+        dummy_image_path = "test_dummy_image_3.png"
+        with open(dummy_image_path, "w") as f: f.write("dummy content")
+        image_provider = Images(dummy_image_path, "logo")
+
+        messages = Messages(UserMessage(text_provider, tools_provider, image_provider))
+
+        # Mock the _fetch_content methods to monitor calls
+        text_provider._fetch_content = AsyncMock(wraps=text_provider._fetch_content)
+        tools_provider._fetch_content = AsyncMock(wraps=tools_provider._fetch_content)
+        image_provider._fetch_content = AsyncMock(wraps=image_provider._fetch_content)
+
+        # 2. Initial render
+        rendered_initial = await messages.render_latest()
+        self.assertIn("Hello", rendered_initial[0]['content'][0]['text'])
+        self.assertIn("tool_A", rendered_initial[0]['content'][1]['text'])
+        self.assertEqual(text_provider._fetch_content.call_count, 1)
+        self.assertEqual(tools_provider._fetch_content.call_count, 1)
+        self.assertEqual(image_provider._fetch_content.call_count, 1)
+
+        # 3. Update providers
+        text_provider.update("Goodbye")
+        tools_provider.update([{"name": "tool_B"}])
+
+        new_dummy_image_path = "test_dummy_image_4.png"
+        with open(new_dummy_image_path, "w") as f: f.write("new dummy content")
+        image_provider.update(new_dummy_image_path)
+
+        # Calling refresh again should not re-fetch yet because we haven't called messages.refresh()
+        await text_provider.refresh()
+        self.assertEqual(text_provider._fetch_content.call_count, 2)
+
+        # 4. Re-render after update
+        rendered_updated = await messages.render_latest()
+        self.assertIn("Goodbye", rendered_updated[0]['content'][0]['text'])
+        self.assertIn("tool_B", rendered_updated[0]['content'][1]['text'])
+
+        # Verify that _fetch_content was called again for all updated providers
+        self.assertEqual(text_provider._fetch_content.call_count, 2)
+        self.assertEqual(tools_provider._fetch_content.call_count, 2)
+        self.assertEqual(image_provider._fetch_content.call_count, 2)
+
+        # Clean up
+        os.remove(dummy_image_path)
+        os.remove(new_dummy_image_path)
 
 # ==============================================================================
 # 6. 演示
