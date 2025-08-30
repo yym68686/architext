@@ -85,7 +85,7 @@ class Images(ContextProvider):
 
 # 3. 消息类 (已合并 MessageContent)
 class Message(ABC):
-    def __init__(self, role: str, *initial_items: Union[ContextProvider, str]):
+    def __init__(self, role: str, *initial_items: Union[ContextProvider, str, list]):
         self.role = role
         processed_items = []
         for item in initial_items:
@@ -93,8 +93,22 @@ class Message(ABC):
                 processed_items.append(Texts(item))
             elif isinstance(item, ContextProvider):
                 processed_items.append(item)
+            elif isinstance(item, list):
+                for sub_item in item:
+                    if not isinstance(sub_item, dict) or 'type' not in sub_item:
+                        raise ValueError("List items must be dicts with a 'type' key.")
+
+                    item_type = sub_item['type']
+                    if item_type == 'text':
+                        processed_items.append(Texts(sub_item.get('text', '')))
+                    elif item_type == 'image_url':
+                        image_url = sub_item.get('image_url', {}).get('url')
+                        if image_url:
+                            processed_items.append(Images(url=image_url))
+                    else:
+                        raise ValueError(f"Unsupported item type in list: {item_type}")
             else:
-                raise TypeError(f"Unsupported item type: {type(item)}. Must be str or ContextProvider.")
+                raise TypeError(f"Unsupported item type: {type(item)}. Must be str, ContextProvider, or list.")
         self._items: List[ContextProvider] = processed_items
         self._parent_messages: Optional['Messages'] = None
 

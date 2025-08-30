@@ -458,6 +458,51 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(TypeError):
             UserMessage(123) # 传入不支持的整数类型
 
+    async def test_o_list_to_providers_conversion(self):
+        """测试在Message初始化时，列表内容是否能被自动转换为相应的provider"""
+        # 1. 混合内容的列表
+        mixed_content_list = [
+            {'type': 'text', 'text': 'Describe the following image.'},
+            {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,VGhpcyBpcyBhIGR1bW15IGltYWdlIGZpbGUu'}}
+        ]
+        user_message_mixed = UserMessage(mixed_content_list)
+
+        self.assertEqual(len(user_message_mixed.providers()), 2)
+        self.assertIsInstance(user_message_mixed.providers()[0], Texts)
+        self.assertIsInstance(user_message_mixed.providers()[1], Images)
+
+        # 验证内容
+        providers = user_message_mixed.providers()
+        await asyncio.gather(*[p.refresh() for p in providers]) # 刷新所有providers
+        self.assertEqual(providers[0].get_content_block().content, 'Describe the following image.')
+        self.assertEqual(providers[1].get_content_block().content, 'data:image/png;base64,VGhpcyBpcyBhIGR1bW15IGltYWdlIGZpbGUu')
+
+        # 2. 纯文本内容的列表
+        text_only_list = [
+            {'type': 'text', 'text': 'First line.'},
+            {'type': 'text', 'text': 'Second line.'}
+        ]
+        user_message_text_only = UserMessage(text_only_list)
+
+        self.assertEqual(len(user_message_text_only.providers()), 2)
+        self.assertIsInstance(user_message_text_only.providers()[0], Texts)
+        self.assertIsInstance(user_message_text_only.providers()[1], Texts)
+
+        # 3. 在 Messages 容器中测试
+        messages = Messages(UserMessage(mixed_content_list))
+        rendered = await messages.render_latest()
+
+        self.assertEqual(len(rendered), 1)
+        self.assertIsInstance(rendered[0]['content'], list)
+        self.assertEqual(len(rendered[0]['content']), 2)
+        self.assertEqual(rendered[0]['content'][0]['type'], 'text')
+        self.assertEqual(rendered[0]['content'][1]['type'], 'image_url')
+
+        # 4. 测试无效的列表项
+        invalid_list = [{'type': 'invalid_type'}]
+        with self.assertRaises(ValueError):
+            UserMessage(invalid_list)
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================
