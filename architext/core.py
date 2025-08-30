@@ -93,8 +93,8 @@ class Texts(ContextProvider):
         return self._text if self._text is not None else ""
 
 class Tools(ContextProvider):
-    def __init__(self, tools_json: Optional[List[Dict]] = None):
-        super().__init__("tools")
+    def __init__(self, tools_json: Optional[List[Dict]] = None, name: str = "tools"):
+        super().__init__(name)
         self._tools_json = tools_json or []
     def update(self, tools_json: List[Dict]):
         self._tools_json = tools_json
@@ -105,8 +105,8 @@ class Tools(ContextProvider):
         return f"<tools>{str(self._tools_json)}</tools>"
 
 class Files(ContextProvider):
-    def __init__(self, *paths: Union[str, List[str]]):
-        super().__init__("files")
+    def __init__(self, *paths: Union[str, List[str]], name: str = "files"):
+        super().__init__(name)
         self._files: Dict[str, str] = {}
 
         file_paths: List[str] = []
