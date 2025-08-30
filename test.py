@@ -217,6 +217,103 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         rendered_content = rendered_messages[0]['content']
         self.assertNotIn("<tools>", rendered_content, "渲染结果中不应再包含 'tools' 的内容，证明数据源已更新")
 
+# ==============================================================================
+# 6. 演示
+# ==============================================================================
+async def run_demo():
+    # --- 1. 初始化提供者 ---
+    system_prompt_provider = Texts("system_prompt", "你是一个AI助手。")
+    tools_provider = Tools(tools_json=[{"name": "read_file"}])
+    files_provider = Files()
+
+    # --- 2. 演示新功能：优雅地构建 Messages ---
+    print("\n>>> 场景 A: 使用新的、优雅的构造函数直接初始化 Messages")
+    messages = Messages(
+        SystemMessage(system_prompt_provider, tools_provider),
+        UserMessage(files_provider, Texts("user_input", "这是我的初始问题。")),
+        UserMessage(Texts("user_input2", "这是我的初始问题2。"))
+    )
+
+    print("\n--- 渲染后的初始 Messages (首次渲染，全部刷新) ---")
+    for msg_dict in await messages.render_latest(): print(msg_dict)
+    print("-" * 40)
+
+    # --- 3. 演示穿透更新 ---
+    print("\n>>> 场景 B: 穿透更新 File Provider，渲染时自动刷新")
+    files_provider_instance = messages.provider("files")
+    if isinstance(files_provider_instance, Files):
+        files_provider_instance.update("file1.py", "这是新的文件内容！")
+
+    print("\n--- 再次渲染 Messages (只有文件提供者会刷新) ---")
+    for msg_dict in await messages.render_latest(): print(msg_dict)
+    print("-" * 40)
+
+    # --- 4. 演示全局 Pop 和通过索引 Insert ---
+    print("\n>>> 场景 C: 全局 Pop 工具提供者，并 Insert 到 UserMessage 中")
+    popped_tools_provider = messages.pop("tools")
+    if popped_tools_provider:
+        messages[1].insert(0, popped_tools_provider)
+        print(f"\n已成功将 '{popped_tools_provider.name}' 提供者移动到用户消息。")
+
+    print("\n--- Pop 和 Insert 后渲染的 Messages (验证移动效果) ---")
+    for msg_dict in messages.render(): print(msg_dict)
+    print("-" * 40)
+
+    # --- 5. 演示多模态渲染 ---
+    print("\n>>> 场景 D: 演示多模态 (文本+图片) 渲染")
+    with open("dummy_image.png", "w") as f:
+        f.write("This is a dummy image file.")
+
+    multimodal_message = Messages(
+        UserMessage(
+            Texts("prompt", "What do you see in this image?"),
+            Images("dummy_image.png")
+        )
+    )
+    print("\n--- 渲染后的多模态 Message ---")
+    for msg_dict in await multimodal_message.render_latest():
+        if isinstance(msg_dict['content'], list):
+            for item in msg_dict['content']:
+                if item['type'] == 'image_url':
+                    item['image_url']['url'] = item['image_url']['url'][:80] + "..."
+        print(msg_dict)
+    print("-" * 40)
+
+    # --- 6. 演示 Tool-Use 流程 ---
+    print("\n>>> 场景 E: 模拟完整的 Tool-Use 流程")
+    # 模拟一个 OpenAI SDK 返回的 tool_call 对象 (使用 dataclass 或 mock object)
+    from dataclasses import dataclass, field
+    @dataclass
+    class MockFunction:
+        name: str
+        arguments: str
+
+    @dataclass
+    class MockToolCall:
+        id: str
+        type: str = "function"
+        function: MockFunction = field(default_factory=MockFunction)
+
+
+    tool_call_request = [
+        MockToolCall(
+            id="call_rddWXkDikIxllRgbPrR6XjtMVSBPv",
+            function=MockFunction(name="add", arguments='{"b": 10, "a": 5}')
+        )
+    ]
+
+    tool_use_messages = Messages(
+        SystemMessage(Texts("system_prompt", "You are a helpful assistant. You must use the provided tools to answer questions.")),
+        UserMessage(Texts("user_question", "What is the sum of 5 and 10?")),
+        ToolCalls(tool_call_request),
+        ToolResults(tool_call_id="call_rddWXkDikIxllRgbPrR6XjtMVSBPv", content="15"),
+        AssistantMessage(Texts("final_answer", "The sum of 5 and 10 is 15."))
+    )
+
+    print("\n--- 渲染后的 Tool-Use Messages ---")
+    import json
+    print(json.dumps(await tool_use_messages.render_latest(), indent=2))
+    print("-" * 40)
 
 if __name__ == '__main__':
     # 为了在普通脚本环境中运行，添加这两行
@@ -224,3 +321,4 @@ if __name__ == '__main__':
     suite.addTest(unittest.makeSuite(TestContextManagement))
     runner = unittest.TextTestRunner()
     runner.run(suite)
+    asyncio.run(run_demo())

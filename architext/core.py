@@ -113,6 +113,52 @@ class SystemMessage(Message):
     def __init__(self, *items): super().__init__("system", *items)
 class UserMessage(Message):
     def __init__(self, *items): super().__init__("user", *items)
+class AssistantMessage(Message):
+    def __init__(self, *items): super().__init__("assistant", *items)
+
+class ToolCalls(Message):
+    """Represents an assistant message that requests tool calls."""
+    def __init__(self, tool_calls: List[Any]):
+        super().__init__("assistant")
+        self.tool_calls = tool_calls
+
+    def to_dict(self) -> Dict[str, Any]:
+        # Duck-typing serialization for OpenAI's tool_call objects
+        serialized_calls = []
+        for tc in self.tool_calls:
+            try:
+                # Attempt to serialize based on openai-python > 1.0 tool_call structure
+                func = tc.function
+                serialized_calls.append({
+                    "id": tc.id,
+                    "type": tc.type,
+                    "function": { "name": func.name, "arguments": func.arguments }
+                })
+            except AttributeError:
+                if isinstance(tc, dict):
+                    serialized_calls.append(tc) # Assume it's already a serializable dict
+                else:
+                    raise TypeError(f"Unsupported tool_call type: {type(tc)}. It should be an OpenAI tool_call object or a dict.")
+
+        return {
+            "role": self.role,
+            "tool_calls": serialized_calls,
+            "content": None
+        }
+
+class ToolResults(Message):
+    """Represents a tool message with the result of a single tool call."""
+    def __init__(self, tool_call_id: str, content: str):
+        super().__init__("tool")
+        self.tool_call_id = tool_call_id
+        self.content = content
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "role": self.role,
+            "tool_call_id": self.tool_call_id,
+            "content": self.content
+        }
 
 # 4. 顶层容器: Messages
 class Messages:
@@ -169,69 +215,3 @@ class Messages:
     def __getitem__(self, index: int) -> Message: return self._messages[index]
     def __len__(self) -> int: return len(self._messages)
     def __iter__(self): return iter(self._messages)
-
-# ==============================================================================
-# 6. 演示
-# ==============================================================================
-async def run_demo():
-    # --- 1. 初始化提供者 ---
-    system_prompt_provider = Texts("system_prompt", "你是一个AI助手。")
-    tools_provider = Tools(tools_json=[{"name": "read_file"}])
-    files_provider = Files()
-
-    # --- 2. 演示新功能：优雅地构建 Messages ---
-    print("\n>>> 场景 A: 使用新的、优雅的构造函数直接初始化 Messages")
-    messages = Messages(
-        SystemMessage(system_prompt_provider, tools_provider),
-        UserMessage(files_provider, Texts("user_input", "这是我的初始问题。")),
-        UserMessage(Texts("user_input2", "这是我的初始问题2。"))
-    )
-
-    print("\n--- 渲染后的初始 Messages (首次渲染，全部刷新) ---")
-    for msg_dict in await messages.render_latest(): print(msg_dict)
-    print("-" * 40)
-
-    # --- 3. 演示穿透更新 ---
-    print("\n>>> 场景 B: 穿透更新 File Provider，渲染时自动刷新")
-    files_provider_instance = messages.provider("files")
-    if isinstance(files_provider_instance, Files):
-        files_provider_instance.update("file1.py", "这是新的文件内容！")
-
-    print("\n--- 再次渲染 Messages (只有文件提供者会刷新) ---")
-    for msg_dict in await messages.render_latest(): print(msg_dict)
-    print("-" * 40)
-
-    # --- 4. 演示全局 Pop 和通过索引 Insert ---
-    print("\n>>> 场景 C: 全局 Pop 工具提供者，并 Insert 到 UserMessage 中")
-    popped_tools_provider = messages.pop("tools")
-    if popped_tools_provider:
-        messages[1].insert(0, popped_tools_provider)
-        print(f"\n已成功将 '{popped_tools_provider.name}' 提供者移动到用户消息。")
-
-    print("\n--- Pop 和 Insert 后渲染的 Messages (验证移动效果) ---")
-    for msg_dict in messages.render(): print(msg_dict)
-    print("-" * 40)
-
-    # --- 5. 演示多模态渲染 ---
-    print("\n>>> 场景 D: 演示多模态 (文本+图片) 渲染")
-    with open("dummy_image.png", "w") as f:
-        f.write("This is a dummy image file.")
-
-    multimodal_message = Messages(
-        UserMessage(
-            Texts("prompt", "What do you see in this image?"),
-            Images("dummy_image.png")
-        )
-    )
-    print("\n--- 渲染后的多模态 Message ---")
-    for msg_dict in await multimodal_message.render_latest():
-        if isinstance(msg_dict['content'], list):
-            for item in msg_dict['content']:
-                if item['type'] == 'image_url':
-                    item['image_url']['url'] = item['image_url']['url'][:80] + "..."
-        print(msg_dict)
-    print("-" * 40)
-
-
-if __name__ == "__main__":
-    asyncio.run(run_demo())
