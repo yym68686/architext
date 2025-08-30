@@ -519,6 +519,42 @@ class TestContextManagement(unittest.IsolatedAsyncioTestCase):
         message_to_be_emptied.pop("removable")
         self.assertFalse(message_to_be_emptied, "消息在最后一个 provider 被移除后应为 False")
 
+    async def test_q_string_addition_to_message(self):
+        """测试字符串与Message对象相加的功能"""
+        # 1. 创建一个 UserMessage
+        original_message = UserMessage("hello")
+
+        # 2. 将字符串与 UserMessage 相加
+        new_message = "hi" + original_message
+
+        # 3. 验证新消息的类型和内容
+        self.assertIsInstance(new_message, UserMessage, "结果应该是一个 UserMessage 实例")
+        self.assertEqual(len(new_message.providers()), 2, "新消息应该包含两个 provider")
+
+        providers = new_message.providers()
+        self.assertIsInstance(providers[0], Texts, "第一个 provider 应该是 Texts 类型")
+        self.assertIsInstance(providers[1], Texts, "第二个 provider 应该是 Texts 类型")
+
+        # 刷新以获取内容
+        await asyncio.gather(*[p.refresh() for p in providers])
+
+        self.assertEqual(providers[0].get_content_block().content, "hi", "第一个 provider 的内容应该是 'hi'")
+        self.assertEqual(providers[1].get_content_block().content, "hello", "第二个 provider 的内容应该是 'hello'")
+
+        # 4. 验证原始消息没有被修改
+        self.assertEqual(len(original_message.providers()), 1, "原始消息不应该被修改")
+
+        # 5. 测试 UserMessage + "string"
+        new_message_add = original_message + "world"
+        self.assertIsInstance(new_message_add, UserMessage)
+        self.assertEqual(len(new_message_add.providers()), 2)
+
+        providers_add = new_message_add.providers()
+        await asyncio.gather(*[p.refresh() for p in providers_add])
+        self.assertEqual(providers_add[0].get_content_block().content, "hello")
+        self.assertEqual(providers_add[1].get_content_block().content, "world")
+
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================

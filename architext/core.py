@@ -135,6 +135,19 @@ class Message(ABC):
             self._parent_messages._notify_provider_added(item, self)
 
     def providers(self) -> List[ContextProvider]: return self._items
+
+    def __add__(self, other):
+        if isinstance(other, str):
+            new_items = self._items + [Texts(text=other)]
+            return type(self)(*new_items)
+        return NotImplemented
+
+    def __radd__(self, other):
+        if isinstance(other, str):
+            new_items = [Texts(text=other)] + self._items
+            return type(self)(*new_items)
+        return NotImplemented
+
     def __repr__(self): return f"Message(role='{self.role}', items={[i.name for i in self._items]})"
     def __bool__(self) -> bool:
         return bool(self._items)
