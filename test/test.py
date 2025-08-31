@@ -1341,6 +1341,51 @@ Files: {Files(visible=True, name="files")}
             if os.path.exists(test_file_path):
                 os.remove(test_file_path)
 
+    async def test_zg_provider_plus_message_addition(self):
+        """测试所有 ContextProvider 子类与 Message 子类相加的功能"""
+        # 1. 准备 providers
+        text_provider = Texts("Some text.")
+        tools_provider = Tools([{"name": "a_tool"}])
+
+        test_file = "test_provider_addition.txt"
+        with open(test_file, "w") as f: f.write("File content.")
+        files_provider = Files(test_file)
+
+        providers_to_test = [text_provider, tools_provider, files_provider]
+
+        # 2. 准备 message aclsdd
+        messages_to_test = [
+            UserMessage(Texts("Initial user message.")),
+            SystemMessage(Texts("Initial system message.")),
+            AssistantMessage(Texts("Initial assistant message."))
+        ]
+
+        try:
+            for provider in providers_to_test:
+                for message in messages_to_test:
+                    with self.subTest(provider=type(provider).__name__, message=type(message).__name__):
+                        # 执行加法操作
+                        result_message = provider + message
+
+                        # 验证结果类型是否与原始 message 相同
+                        self.assertIsInstance(result_message, type(message), f"结果应为 {type(message).__name__} 类型")
+
+                        # 验证 provider 数量
+                        self.assertEqual(len(result_message), 2, "结果消息应包含两个 provider")
+
+                        # 验证 provider 的类型和顺序
+                        result_providers = result_message.provider()
+                        self.assertIsInstance(result_providers[0], type(provider), f"第一个 provider 应为 {type(provider).__name__} 类型")
+                        self.assertIsInstance(result_providers[1], Texts, "第二个 provider 应为 Texts 类型")
+
+                        # 验证原始消息没有被修改
+                        self.assertEqual(len(message), 1)
+
+        finally:
+            # 3. 清理文件
+            if os.path.exists(test_file):
+                os.remove(test_file)
+
 
 # ==============================================================================
 # 6. 演示

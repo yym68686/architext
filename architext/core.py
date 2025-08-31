@@ -96,6 +96,13 @@ class ContextProvider(ABC):
             return ContentBlock(self.name, self._cached_content)
         return None
 
+    def __add__(self, other):
+        if isinstance(other, Message):
+            # Create a new message of the same type as `other`, with `self` prepended.
+            new_items = [self] + other.provider()
+            return type(other)(*new_items)
+        return NotImplemented
+
 class Texts(ContextProvider):
     def __init__(self, text: Optional[Union[str, Callable[[], str]]] = None, name: Optional[str] = None, visible: bool = True):
         if text is None and name is None:
