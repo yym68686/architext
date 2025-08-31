@@ -1158,7 +1158,46 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         with self.assertRaises(IndexError):
             _ = mess[2]
 
-    async def test_zb_message_provider_by_name(self):
+    async def test_zb_fstring_provider_invisible_on_init(self):
+        """测试在f-string中初始化的provider可以被设置为不可见"""
+
+        # 1. 在 f-string 中初始化一个 provider 并设置 visible=False
+        # 在修改前，这会因为 __init__ 不接受 'visible' 参数而失败
+        message_with_invisible_provider = f"""
+Tools: {Tools(tools_json=[{"name": "should_not_appear"}], visible=False)}
+Files: {Files(visible=True, name="files")}
+"""
+
+        messages = Messages(UserMessage(message_with_invisible_provider))
+
+        # 2. 准备 Files provider 的内容
+        test_file = "test_invisible_fstring.txt"
+        with open(test_file, "w") as f:
+            f.write("visible content")
+
+        try:
+            files_provider = messages.provider("files")
+            self.assertIsNotNone(files_provider)
+            files_provider.update(test_file)
+
+            # 3. 渲染并验证
+            rendered = await messages.render_latest()
+            self.assertEqual(len(rendered), 1)
+            content = rendered[0]['content']
+
+            # 4. 验证不可见的 provider 的内容没有出现
+            self.assertNotIn("<tools>", content)
+            self.assertNotIn("should_not_appear", content)
+
+            # 5. 验证可见的 provider 的内容正常出现
+            self.assertIn("<latest_file_content>", content)
+            self.assertIn("visible content", content)
+
+        finally:
+            if os.path.exists(test_file):
+                os.remove(test_file)
+
+    async def test_zc_message_provider_by_name(self):
         """测试是否可以通过名称从 Message 对象中获取 provider"""
         # 1. 创建一个包含命名 provider 的 Message
         message = UserMessage(
@@ -1182,7 +1221,7 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         non_existent_provider = message.provider("non_existent")
         self.assertIsNone(non_existent_provider)
 
-    async def test_zc_slicing_support(self):
+    async def test_zd_slicing_support(self):
         """测试 Messages 对象是否支持切片操作"""
         m1 = SystemMessage("1")
         m2 = UserMessage("2")
@@ -1217,7 +1256,7 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         self.assertEqual(len(sliced_single), 1)
         self.assertIs(sliced_single[0], m3)
 
-    async def test_zd_slice_assignment(self):
+    async def test_ze_slice_assignment(self):
         """测试 Messages 对象的切片赋值功能"""
         # 1. Setup initial Messages objects
         m1 = SystemMessage("1")
@@ -1258,7 +1297,7 @@ Current time: {Texts(lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"))}
         self.assertEqual(messages3[2].content, "C")
         self.assertIsInstance(messages3[1], AssistantMessage)
 
-    async def test_ze_fstring_lambda_serialization(self):
+    async def test_zf_fstring_lambda_serialization(self):
         """测试包含 lambda 的 f-string 消息是否可以被序列化和反序列化"""
         import platform
         import os

@@ -58,11 +58,11 @@ class ContentBlock:
 
 # 2. 上下文提供者 (带缓存)
 class ContextProvider(ABC):
-    def __init__(self, name: str):
+    def __init__(self, name: str, visible: bool = True):
         self.name = name
         self._cached_content: Optional[str] = None
         self._is_stale: bool = True
-        self._visible: bool = True
+        self._visible: bool = visible
 
     def __str__(self):
         # This allows the object to be captured when used inside an f-string.
@@ -97,7 +97,7 @@ class ContextProvider(ABC):
         return None
 
 class Texts(ContextProvider):
-    def __init__(self, text: Optional[Union[str, Callable[[], str]]] = None, name: Optional[str] = None):
+    def __init__(self, text: Optional[Union[str, Callable[[], str]]] = None, name: Optional[str] = None, visible: bool = True):
         if text is None and name is None:
             raise ValueError("Either 'text' or 'name' must be provided.")
 
@@ -119,7 +119,7 @@ class Texts(ContextProvider):
                 _name = f"text_{h[:8]}"
         else:
             _name = name
-        super().__init__(_name)
+        super().__init__(_name, visible=visible)
 
     async def refresh(self):
         if self._is_dynamic:
@@ -180,8 +180,8 @@ class Texts(ContextProvider):
         return self.content == other.content
 
 class Tools(ContextProvider):
-    def __init__(self, tools_json: Optional[List[Dict]] = None, name: str = "tools"):
-        super().__init__(name)
+    def __init__(self, tools_json: Optional[List[Dict]] = None, name: str = "tools", visible: bool = True):
+        super().__init__(name, visible=visible)
         self._tools_json = tools_json or []
     def update(self, tools_json: List[Dict]):
         self._tools_json = tools_json
@@ -197,8 +197,8 @@ class Tools(ContextProvider):
         return self._tools_json == other._tools_json
 
 class Files(ContextProvider):
-    def __init__(self, *paths: Union[str, List[str]], name: str = "files"):
-        super().__init__(name)
+    def __init__(self, *paths: Union[str, List[str]], name: str = "files", visible: bool = True):
+        super().__init__(name, visible=visible)
         self._files: Dict[str, str] = {}
 
         file_paths: List[str] = []
@@ -278,8 +278,8 @@ class Files(ContextProvider):
         return self._files == other._files
 
 class Images(ContextProvider):
-    def __init__(self, url: str, name: Optional[str] = None):
-        super().__init__(name or url)
+    def __init__(self, url: str, name: Optional[str] = None, visible: bool = True):
+        super().__init__(name or url, visible=visible)
         self.url = url
     def update(self, url: str):
         self.url = url
