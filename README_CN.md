@@ -39,7 +39,8 @@
 *   **面向对象的上下文建模**: 将 `SystemMessage`、`UserMessage` 等视为可操作的 Python 一等公民。
 *   **提供者驱动架构**: 可扩展的 `ContextProvider` 体系 (`Texts`, `Files`, `Images`, `Tools`)，用于连接任何数据源。
 *   **使用 `lambda` 实现动态内容**: `Texts(lambda: ...)` 提供者可以在渲染时即时执行代码生成内容。
-*   **强大的列表式操作**: 使用 `pop()`、`insert()`、`append()`、索引 (`messages[0]`) 和切片 (`messages[1:3]`) 操作消息。
+*   **强大的列表式操作**: 使用 `pop()`、`insert()`、`append()`、索引 (`messages[0]`)、切片 (`messages[1:3]`) 甚至切片赋值 (`messages[1:] = ...`) 来操作消息。
+*   **Pythonic & 风格统一**: 享受自然的编码体验。消息可以通过 `+` 进行拼接，内容可以通过字典风格的键 (`msg['content']`) 访问，内部的 provider 也可以通过列表风格的索引 (`msg[0]`) 访问。
 *   **可见性控制**: 通过 `.visible = False` 切换提供者的渲染状态而无需移除它们，实现动态上下文过滤。
 *   **批量操作**: 使用 `ProviderGroup` 同时管理多个同名提供者 (例如 `messages.provider("explanation").visible = False`)。
 *   **智能缓存**: 内置机制仅在数据源变化时自动刷新内容，提升性能。
@@ -168,7 +169,20 @@ Architext 原生支持多模态交互和工具使用流程所需的复杂消息�
 
 ```python
 import asyncio
+from dataclasses import dataclass, field
 from architext import Messages, UserMessage, AssistantMessage, Texts, Images, ToolCalls, ToolResults
+
+# 使用 dataclass 模拟来自 OpenAI 等库的 tool_call 对象
+@dataclass
+class MockFunction:
+    name: str
+    arguments: str
+
+@dataclass
+class MockToolCall:
+    id: str
+    type: str = "function"
+    function: MockFunction = field(default_factory=lambda: MockFunction("", ""))
 
 async def example_3():
     # --- 多模态示例 ---
@@ -184,10 +198,15 @@ async def example_3():
     for msg in await multimodal_messages.render_latest(): print(msg)
 
     # --- 工具使用示例 ---
+    # 模拟一个来自模型的 tool call 请求
+    tool_call_request = [
+        MockToolCall(id="call_123", function=MockFunction(name="add", arguments='{"a": 5, "b": 10}'))
+    ]
+
     tool_use_messages = Messages(
         UserMessage("5 + 10 是多少?"),
         # 代表模型请求调用工具
-        ToolCalls([{'id': 'call_123', 'type': 'function', 'function': {'name': 'add', 'arguments': '{"a": 5, "b": 10}'}}]),
+        ToolCalls(tool_call_request),
         # 代表您返回给模型的结果
         ToolResults(tool_call_id="call_123", content="15"),
         AssistantMessage("它们的和是 15。")
@@ -225,7 +244,8 @@ async def example_4():
     print("\n>>> 通过 messages.provider('code_files') 更新文件...")
     files_provider = messages.provider("code_files")
     if files_provider:
-        files_provider.update("main.py", "def main():\n    print('Hello')")
+        # 在内存中为一个新文件更新内容
+        files_provider.update("main.py", "def main():\\n    print('Hello')")
 
     # 4. 再次渲染。Architext 检测到过期的提供者并刷新它。
     print("\n--- 更新后渲染 ---")

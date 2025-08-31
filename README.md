@@ -39,7 +39,8 @@ The core philosophy of `Architext` is to elevate the context construction proces
 *   **Object-Oriented Context Modeling**: Treat `SystemMessage`, `UserMessage`, etc., as first-class, operable Python objects.
 *   **Provider-Driven Architecture**: Extensible `ContextProvider` system (`Texts`, `Files`, `Images`, `Tools`) to connect any data source.
 *   **Dynamic Content with `lambda`**: `Texts(lambda: ...)` providers can execute code to generate content on-the-fly during rendering.
-*   **Powerful List-like Operations**: Manipulate messages with `pop()`, `insert()`, `append()`, indexing (`messages[0]`), and slicing (`messages[1:3]`).
+*   **Powerful List-like Operations**: Manipulate messages with `pop()`, `insert()`, `append()`, indexing (`messages[0]`), slicing (`messages[1:3]`), and even slice assignment (`messages[1:] = ...`).
+*   **Pythonic & Idiomatic**: Enjoy a natural coding experience. Messages can be concatenated with `+`, content accessed via dictionary-style keys (`msg['content']`), and internal providers accessed via list-style indexing (`msg[0]`).
 *   **Visibility Control**: Toggle providers on and off with `.visible = False` without removing them, enabling dynamic context filtering.
 *   **Bulk Operations**: Use `ProviderGroup` to manage multiple providers with the same name simultaneously (e.g., `messages.provider("explanation").visible = False`).
 *   **Intelligent Caching**: Built-in mechanism automatically refreshes content only when the source changes, boosting performance.
@@ -168,7 +169,20 @@ Architext natively supports complex message structures required for multimodal i
 
 ```python
 import asyncio
+from dataclasses import dataclass, field
 from architext import Messages, UserMessage, AssistantMessage, Texts, Images, ToolCalls, ToolResults
+
+# Helper dataclasses to simulate tool call objects from libraries like OpenAI's
+@dataclass
+class MockFunction:
+    name: str
+    arguments: str
+
+@dataclass
+class MockToolCall:
+    id: str
+    type: str = "function"
+    function: MockFunction = field(default_factory=lambda: MockFunction("", ""))
 
 async def example_3():
     # --- Multimodal Example ---
@@ -184,10 +198,15 @@ async def example_3():
     for msg in await multimodal_messages.render_latest(): print(msg)
 
     # --- Tool-Use Example ---
+    # Simulate a tool call request from the model
+    tool_call_request = [
+        MockToolCall(id="call_123", function=MockFunction(name="add", arguments='{"a": 5, "b": 10}'))
+    ]
+
     tool_use_messages = Messages(
         UserMessage("What is 5 + 10?"),
         # Represents the model's request to call a tool
-        ToolCalls([{'id': 'call_123', 'type': 'function', 'function': {'name': 'add', 'arguments': '{"a": 5, "b": 10}'}}]),
+        ToolCalls(tool_call_request),
         # Represents the result you provide back to the model
         ToolResults(tool_call_id="call_123", content="15"),
         AssistantMessage("The sum is 15.")
@@ -225,7 +244,8 @@ async def example_4():
     print("\n>>> Updating files via messages.provider('code_files')...")
     files_provider = messages.provider("code_files")
     if files_provider:
-        files_provider.update("main.py", "def main():\n    print('Hello')")
+        # Update with content for a new file in memory
+        files_provider.update("main.py", "def main():\\n    print('Hello')")
 
     # 4. Render again. Architext detects the stale provider and refreshes it.
     print("\n--- Render After Update ---")
