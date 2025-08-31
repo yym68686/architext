@@ -1386,6 +1386,29 @@ Files: {Files(visible=True, name="files")}
             if os.path.exists(test_file):
                 os.remove(test_file)
 
+    async def test_zh_provider_plus_message_assignment(self):
+        """测试 ContextProvider + Message 的结果可以赋值回 Messages 列表"""
+        # 1. 准备 provider 和 messages
+        text_provider = Texts("Prefix text.")
+        messages = Messages(
+            UserMessage("Initial user message.")
+        )
+
+        # 2. 执行操作
+        # 这行代码在修改 __setitem__ 之前应该会失败
+        messages[0] = text_provider + messages[0]
+
+        # 3. 验证结果
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(len(messages[0]), 2) # Now UserMessage has two providers
+
+        # 4. 验证内容
+        rendered = await messages.render_latest()
+        self.assertEqual(rendered[0]['content'], "Prefix text.Initial user message.")
+
+        # 5. 验证 provider 索引
+        self.assertIsNotNone(messages.provider(text_provider.name))
+
 
 # ==============================================================================
 # 6. 演示

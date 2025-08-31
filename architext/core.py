@@ -672,30 +672,48 @@ class Messages:
             return Messages(*self._messages[index])
         return self._messages[index]
 
-    def __setitem__(self, index: slice, value: 'Messages'):
-        if not isinstance(index, slice) or not isinstance(value, Messages):
-            raise TypeError("Unsupported operand type(s) for slice assignment")
+    def __setitem__(self, index: Union[int, slice], value: Union[Message, 'Messages']):
+        if isinstance(index, int):
+            if not isinstance(value, Message):
+                raise TypeError("When assigning to an index, the value must be a Message.")
 
-        # Basic slice assignment logic.
-        # A more robust implementation would handle step and negative indices.
-        start, stop, step = index.indices(len(self._messages))
+            if not (-len(self._messages) <= index < len(self._messages)):
+                raise IndexError("Messages assignment index out of range")
 
-        if step != 1:
-            raise ValueError("Slice assignment with step is not supported.")
-
-        # Remove old providers from the index
-        for i in range(start, stop):
-            for provider in self._messages[i].provider():
+            # Get old message to remove its providers
+            old_message = self._messages[index]
+            for provider in old_message.provider():
                 self._notify_provider_removed(provider)
 
-        # Replace the slice in the list
-        self._messages[start:stop] = value._messages
+            # Assign new message
+            self._messages[index] = value
+            value._parent_messages = self
+            for provider in value.provider():
+                self._notify_provider_added(provider, value)
 
-        # Add new providers to the index and set parent
-        for msg in value:
-            msg._parent_messages = self
-            for provider in msg.provider():
-                self._notify_provider_added(provider, msg)
+        elif isinstance(index, slice):
+            if not isinstance(value, Messages):
+                raise TypeError("When assigning to a slice, the value must be a Messages object.")
+
+            start, stop, step = index.indices(len(self._messages))
+            if step != 1:
+                raise ValueError("Slice assignment with step is not supported.")
+
+            # Remove old providers from the index
+            for i in range(start, stop):
+                for provider in self._messages[i].provider():
+                    self._notify_provider_removed(provider)
+
+            # Replace the slice in the list
+            self._messages[start:stop] = value._messages
+
+            # Add new providers to the index and set parent
+            for msg in value:
+                msg._parent_messages = self
+                for provider in msg.provider():
+                    self._notify_provider_added(provider, msg)
+        else:
+            raise TypeError("Unsupported operand type(s) for assignment")
 
     def __len__(self) -> int: return len(self._messages)
     def __iter__(self): return iter(self._messages)
