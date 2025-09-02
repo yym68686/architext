@@ -53,208 +53,142 @@
 pip install architext
 ```
 
-## 🚀 快速上手：一次上下文工程实践
+## 🚀 快速上手: 真实世界场景
 
-以下示例按从最独特到基础的顺序，展示了 Architext 最强大的功能。
+以下场景展示了 Architext 如何以惊人的简洁性解决常见但复杂的上下文工程挑战。
 
-### 示例 1: F-String 提示构建的魔力 (亮点功能)
+### 场景 1: 跨环境的动态上下文
 
-忘掉手动拼接字符串。使用您早已熟悉的工具——F-string——以声明式和动态的方式构建提示。
+一个在 Windows 上开发的 Agent 需要在 Mac 上运行。手动更新硬编码的系统提示既繁琐又容易出错。Architext 使其动态化。
 
 ```python
+import json
+import time
 import asyncio
-from architext import Messages, UserMessage, Texts, Tools, Files
+import platform
 from datetime import datetime
+from architext import Messages, SystemMessage, Texts
 
 async def example_1():
-    # 定义将嵌入 f-string 的提供者
-    os_provider = Texts("MacOS Sonoma", name="os_version")
-    tools_provider = Tools([{"name": "read_file"}])
-    files_provider = Files(["main.py", "utils.py"])
-    time_provider = Texts(lambda: datetime.now().isoformat()) # 动态内容！
+    # Lambda 函数在每次调用 `render_latest` 时都会被重新求值。
+    messages = Messages(
+        SystemMessage(f"操作系统: {Texts(lambda: platform.platform())}, 时间: {Texts(lambda: datetime.now().isoformat())}")
+    )
 
-    # 为示例创建虚拟文件
-    with open("main.py", "w") as f: f.write("print('hello')")
-    with open("utils.py", "w") as f: f.write("def helper(): pass")
+    print("--- 第一次渲染 (例如, 在 MacOS 上) ---")
+    new_messages = await messages.render_latest()
+    print(json.dumps(new_messages, indent=2, ensure_ascii=False))
 
-    # 用一个 f-string 构建完整的消息！
-    # Architext 会自动检测并管理嵌入的提供者。
-    prompt = f"""
-    系统信息:
-    - 操作系统: {os_provider}
-    - 当前时间: {time_provider}
+    time.sleep(1)
 
-    可用工具: {tools_provider}
-
-    文件内容:
-    {files_provider}
-
-    用户请求:
-    根据文件内容，分析这个项目的主要功能是什么？
-    """
-
-    messages = Messages(UserMessage(prompt))
-
-    # 渲染完全构建好的消息
-    print("--- F-String 渲染结果 ---")
-    for msg in await messages.render_latest():
-        print(msg['content'])
-
-    # 清理虚拟文件
-    import os
-    os.remove("main.py")
-    os.remove("utils.py")
+    print("\n--- 第二次渲染 (时间已更新) ---")
+    new_messages = await messages.render_latest()
+    print(json.dumps(new_messages, indent=2, ensure_ascii=False))
 
 asyncio.run(example_1())
 ```
+**它为何强大:** 无需任何手动干预。`platform.platform()` 和 `datetime.now()` 在渲染时被求值。这彻底将静态的字符串拼接革命为声明式的、动态的上下文构建。你只需声明*需要什么*信息，Architext 会在运行时为你注入最新状态。
 
-**预期输出:** F-string 会被所有提供者的内容完全解析，包括动态生成的时间戳和文件内容。
+### 场景 2: 智能文件管理
 
----
-
-### 示例 2: 动态上下文重构与可见性控制
-
-根据应用逻辑实时调整上下文。在这里，我们移动一个工具定义，然后一次性隐藏多个“解释”提供者。
+当 Agent 处理文件时，你常常需要手动将最新的文件内容注入到提示中。Architext 自动化了这一过程。
 
 ```python
+import json
 import asyncio
-from architext import Messages, SystemMessage, UserMessage, Texts, Tools
+from architext import Messages, UserMessage, Files, SystemMessage
 
 async def example_2():
+    with open("main.py", "w", encoding="utf-8") as f: f.write("print('你好')")
+
     messages = Messages(
-        SystemMessage(
-            Texts("你是一个AI助手。", name="intro"),
-            Tools([{"name": "run_code"}]) # 初始在 SystemMessage 中
-        ),
-        UserMessage(
-            Texts("第一个解释。", name="explanation"),
-            Texts("请运行代码。", name="request"),
-            Texts("第二个解释。", name="explanation")
-        )
+        SystemMessage("分析这个文件:", Files(name="code_files")),
+        UserMessage("hi")
     )
 
-    # --- A 部分: 移动提供者 ---
-    print(">>> 重构: 为了强调，将 'tools' 移动到 UserMessage...")
+    # Agent "读取" 了文件。我们只需告诉 provider 它的路径。
+    messages.provider("code_files").update("main.py")
 
-    # 1. 从任何位置全局弹出提供者
-    tools_provider = messages.pop("tools")
-    # 2. 将其插入到指定消息的指定位置
-    if tools_provider:
-        messages[1].insert(1, tools_provider)
+    # `render_latest()` 会自动从磁盘读取文件。
+    new_messages = await messages.render_latest()
+    print(json.dumps(new_messages, indent=2, ensure_ascii=False))
 
-    print("\n--- 移动 'tools' 之后 ---")
-    for msg in await messages.render_latest(): print(msg)
-
-    # --- B 部分: 批量隐藏提供者 ---
-    print("\n>>> 隐藏所有 'explanation' 提供者...")
-
-    # 1. 获取所有名为 "explanation" 的提供者组
-    explanation_group = messages.provider("explanation")
-    # 2. 为整个组设置可见性
-    explanation_group.visible = False
-
-    print("\n--- 隐藏解释之后 ---")
-    for msg in await messages.render_latest(): print(msg)
+    import os
+    os.remove("main.py")
 
 asyncio.run(example_2())
 ```
+**它为何强大:** 即便文件在 Agent 运行期间被修改，`messages.render_latest()` 始终能获取到最新的文件内容。它自动处理了文件的读取、格式化和注入。
 
-**预期输出:** 您将看到 `<tools>` 块从系统消息移动到用户消息。然后，在最终输出中，“第一个解释”和“第二个解释”的文本将会消失，而其余内容保持不变。
+### 场景 3: 轻松的上下文重构
 
----
-
-### 示例 3: 多模态与工具使用对话
-
-Architext 原生支持多模态交互和工具使用流程所需的复杂消息结构。
+需要将一段上下文（如文件内容）从系统消息移动到用户消息？传统方法是字符串操作的噩梦，尤其是在处理多模态内容时。使用 Architext，只需两行代码。
 
 ```python
+import json
 import asyncio
-from dataclasses import dataclass, field
-from architext import Messages, UserMessage, AssistantMessage, Texts, Images, ToolCalls, ToolResults
-
-# 使用 dataclass 模拟来自 OpenAI 等库的 tool_call 对象
-@dataclass
-class MockFunction:
-    name: str
-    arguments: str
-
-@dataclass
-class MockToolCall:
-    id: str
-    type: str = "function"
-    function: MockFunction = field(default_factory=lambda: MockFunction("", ""))
+from architext import Messages, UserMessage, Files, SystemMessage, Images
 
 async def example_3():
-    # --- 多模态示例 ---
-    with open("dummy_image.png", "w") as f: f.write("dummy")
+    with open("main.py", "w", encoding="utf-8") as f: f.write("print('你好')")
+    with open("image.png", "w", encoding="utf-8") as f: f.write("dummy")
 
-    multimodal_messages = Messages(
-        UserMessage(
-            "这张图片里有什么？",
-            Images("dummy_image.png")
-        )
+    messages = Messages(
+        SystemMessage("代码:", Files("main.py", name="code_files")),
+        UserMessage("hi", Images("image.png"))
     )
-    print("--- 多模态渲染结果 ---")
-    for msg in await multimodal_messages.render_latest(): print(msg)
 
-    # --- 工具使用示例 ---
-    # 模拟一个来自模型的 tool call 请求
-    tool_call_request = [
-        MockToolCall(id="call_123", function=MockFunction(name="add", arguments='{"a": 5, "b": 10}'))
-    ]
+    print("--- 移动前 ---")
+    print(json.dumps(await messages.render_latest(), indent=2, ensure_ascii=False))
 
-    tool_use_messages = Messages(
-        UserMessage("5 + 10 是多少?"),
-        # 代表模型请求调用工具
-        ToolCalls(tool_call_request),
-        # 代表您返回给模型的结果
-        ToolResults(tool_call_id="call_123", content="15"),
-        AssistantMessage("它们的和是 15。")
-    )
-    print("\n--- 工具使用渲染结果 ---")
-    for msg in await tool_use_messages.render_latest(): print(msg)
+    # 将整个 Files 块移动到用户消息
+    files_provider = messages.pop("code_files")
+    messages[1].append(files_provider) # 追加到末尾
+
+    print("\n--- 移动后 ---")
+    print(json.dumps(await messages.render_latest(), indent=2, ensure_ascii=False))
+
+    # 添加到开头也同样简单: messages[1] = files_provider + messages[1]
 
     import os
-    os.remove("dummy_image.png")
+    os.remove("main.py")
+    os.remove("image.png")
 
 asyncio.run(example_3())
 ```
+**它为何强大:** `messages.pop("code_files")` 通过名称查找并移除 provider，无论它在何处。Architext 自动处理了多模态消息结构的复杂性，让你专注于逻辑，而非数据格式。
 
-**预期输出:** 两个示例都将渲染成现代 LLM API (如 OpenAI) 所期望的精确字典格式，正确处理多模态消息的列表式内容以及 `tool_calls`/`tool` 角色。
+### 场景 4: 用于提示优化的精细可见性控制
 
----
-
-### 示例 4: 穿透式更新与自动刷新
-
-从任何地方更新任何上下文片段，Architext 将确保这些更改在下一次渲染时得到反映。
+为了防止模型输出被截断，一个常见的技巧是在*最后一条*用户提示中添加指令。手动管理这个过程非常复杂。Architext 提供了精确的可见性控制。
 
 ```python
+import json
 import asyncio
-from architext import Messages, UserMessage, Files
+from architext import Messages, SystemMessage, Texts, UserMessage, AssistantMessage
 
 async def example_4():
-    # 1. 初始化一个 Files 提供者
-    messages = Messages(UserMessage(Files(name="code_files")))
+    # 将同一个命名的 provider 添加到多个消息中
+    done_marker = Texts("\n\n你的消息 **必须** 以 [done] 结尾。", name="done_marker")
 
-    # 2. 初始时，内容为空
-    print("--- 初始状态 (未加载文件) ---")
-    print(await messages.render_latest())
+    messages = Messages(
+        SystemMessage("你是一个乐于助人的助手。"),
+        UserMessage("hi", done_marker),
+        AssistantMessage("hello"),
+        UserMessage("hi again", done_marker),
+    )
 
-    # 3. 获取提供者的句柄并更新它
-    print("\n>>> 通过 messages.provider('code_files') 更新文件...")
-    files_provider = messages.provider("code_files")
-    if files_provider:
-        # 在内存中为一个新文件更新内容
-        files_provider.update("main.py", "def main():\\n    print('Hello')")
+    # 1. 隐藏所有 "done_marker" provider 的实例
+    messages.provider("done_marker").visible = False
+    # 2. 仅使最后一个实例可见
+    messages.provider("done_marker")[-1].visible = True
 
-    # 4. 再次渲染。Architext 检测到过期的提供者并刷新它。
-    print("\n--- 更新后渲染 ---")
-    for msg in await messages.render_latest(): print(msg)
+    new_messages = await messages.render_latest()
+    print(json.dumps(new_messages, indent=2, ensure_ascii=False))
 
 asyncio.run(example_4())
 ```
-
-**预期输出:** 第一次渲染结果将为空。更新后，第二次渲染将正确显示 `main.py` 的内容。
+**它为何强大:** 通过命名 provider，你可以对它们进行批量操作。一行代码隐藏所有实例，另一行代码选择性地重新启用你需要的那个。这是一个强大的模式，可用于条件化提示、A/B 测试或在长对话中管理系统指令。
 
 ## 🤝 贡献 (Contributing)
 

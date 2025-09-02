@@ -53,208 +53,142 @@ The core philosophy of `Architext` is to elevate the context construction proces
 pip install architext
 ```
 
-## 🚀 Quick Start: A Context Engineering Practice
+## 🚀 Quick Start: Real-World Scenarios
 
-The following examples showcase Architext's most powerful features, ordered from the most unique to the foundational.
+The following scenarios demonstrate how Architext solves common, yet complex, context engineering challenges with remarkable simplicity.
 
-### Example 1: The Magic of F-String Prompt Construction (Highlight Feature)
+### Scenario 1: Dynamic Context Across Environments
 
-Forget manual string joining. Build prompts declaratively and dynamically using the tools you already know and love: f-strings.
+An agent developed on Windows needs to run on a Mac. Manually updating a hardcoded system prompt is tedious and error-prone. Architext makes this dynamic.
 
 ```python
+import json
+import time
 import asyncio
-from architext import Messages, UserMessage, Texts, Tools, Files
+import platform
 from datetime import datetime
+from architext import Messages, SystemMessage, Texts
 
 async def example_1():
-    # Define providers that will be embedded in the f-string
-    os_provider = Texts("MacOS Sonoma", name="os_version")
-    tools_provider = Tools([{"name": "read_file"}])
-    files_provider = Files(["main.py", "utils.py"])
-    time_provider = Texts(lambda: datetime.now().isoformat()) # Dynamic content!
+    # Lambda functions are re-evaluated every time `render_latest` is called.
+    messages = Messages(
+        SystemMessage(f"OS: {Texts(lambda: platform.platform())}, Time: {Texts(lambda: datetime.now().isoformat())}")
+    )
 
-    # Create dummy files for the example
-    with open("main.py", "w") as f: f.write("print('hello')")
-    with open("utils.py", "w") as f: f.write("def helper(): pass")
+    print("--- First Render (e.g., on MacOS) ---")
+    new_messages = await messages.render_latest()
+    print(json.dumps(new_messages, indent=2))
 
-    # Construct the entire message with a single f-string!
-    # Architext automatically detects and manages the embedded providers.
-    prompt = f"""
-    System Information:
-    - OS: {os_provider}
-    - Time: {time_provider}
+    time.sleep(1)
 
-    Available Tools: {tools_provider}
-
-    File Contents:
-    {files_provider}
-
-    User Request:
-    Based on the files, what is the primary function of this project?
-    """
-
-    messages = Messages(UserMessage(prompt))
-
-    # Render the fully constructed message
-    print("--- F-String Render Result ---")
-    for msg in await messages.render_latest():
-        print(msg['content'])
-
-    # Clean up dummy files
-    import os
-    os.remove("main.py")
-    os.remove("utils.py")
+    print("\n--- Second Render (Time updated) ---")
+    new_messages = await messages.render_latest()
+    print(json.dumps(new_messages, indent=2))
 
 asyncio.run(example_1())
 ```
+**Why it's powerful:** No manual intervention needed. `platform.platform()` and `datetime.now()` are evaluated at render time. This transforms static string concatenation into declarative, dynamic context construction. You declare *what* information you need, and Architext injects the latest state at runtime.
 
-**Expected Output:** The f-string is fully resolved with content from all providers, including the dynamically generated timestamp and file contents.
+### Scenario 2: Intelligent File Management
 
----
-
-### Example 2: Dynamic Context Refactoring & Visibility Control
-
-Adapt the context in real-time based on application logic. Here, we move a tool definition and then hide multiple "explanation" providers at once.
+When an agent processes files, you often have to manually inject the latest file content into the prompt. Architext automates this.
 
 ```python
+import json
 import asyncio
-from architext import Messages, SystemMessage, UserMessage, Texts, Tools
+from architext import Messages, UserMessage, Files, SystemMessage
 
 async def example_2():
+    with open("main.py", "w") as f: f.write("print('hello')")
+
     messages = Messages(
-        SystemMessage(
-            Texts("You are an AI assistant.", name="intro"),
-            Tools([{"name": "run_code"}]) # Initially in SystemMessage
-        ),
-        UserMessage(
-            Texts("First explanation.", name="explanation"),
-            Texts("Please run the code.", name="request"),
-            Texts("Second explanation.", name="explanation")
-        )
+        SystemMessage("Analyze this file:", Files(name="code_files")),
+        UserMessage("hi")
     )
 
-    # --- Part A: Move a provider ---
-    print(">>> Refactoring: Moving 'tools' to UserMessage for emphasis...")
+    # The agent "reads" the file. We just need to tell the provider its path.
+    messages.provider("code_files").update("main.py")
 
-    # 1. Globally pop the provider from wherever it is
-    tools_provider = messages.pop("tools")
-    # 2. Insert it into a specific message and position
-    if tools_provider:
-        messages[1].insert(1, tools_provider)
+    # `render_latest()` automatically reads the file from disk.
+    new_messages = await messages.render_latest()
+    print(json.dumps(new_messages, indent=2))
 
-    print("\n--- After Moving 'tools' ---")
-    for msg in await messages.render_latest(): print(msg)
-
-    # --- Part B: Bulk-hide providers ---
-    print("\n>>> Hiding all 'explanation' providers...")
-
-    # 1. Get a group of all providers named "explanation"
-    explanation_group = messages.provider("explanation")
-    # 2. Set visibility for the entire group
-    explanation_group.visible = False
-
-    print("\n--- After Hiding Explanations ---")
-    for msg in await messages.render_latest(): print(msg)
+    import os
+    os.remove("main.py")
 
 asyncio.run(example_2())
 ```
+**Why it's powerful:** `messages.render_latest()` always gets the most up-to-date file content, even if the file is modified on disk *during* the agent's run. It handles reading, formatting, and injection automatically.
 
-**Expected Output:** You will see the `<tools>` block move from the system to the user message. Then, in the final output, the "First explanation" and "Second explanation" texts will disappear, while the rest of the content remains.
+### Scenario 3: Effortless Context Refactoring
 
----
-
-### Example 3: Multimodal and Tool-Use Conversations
-
-Architext natively supports complex message structures required for multimodal interactions and tool-use cycles.
+Need to move a block of context, like file contents, from a system message to a user message? Traditionally, this is a nightmare of string manipulation, especially with multimodal content. With Architext, it's two lines of code.
 
 ```python
+import json
 import asyncio
-from dataclasses import dataclass, field
-from architext import Messages, UserMessage, AssistantMessage, Texts, Images, ToolCalls, ToolResults
-
-# Helper dataclasses to simulate tool call objects from libraries like OpenAI's
-@dataclass
-class MockFunction:
-    name: str
-    arguments: str
-
-@dataclass
-class MockToolCall:
-    id: str
-    type: str = "function"
-    function: MockFunction = field(default_factory=lambda: MockFunction("", ""))
+from architext import Messages, UserMessage, Files, SystemMessage, Images
 
 async def example_3():
-    # --- Multimodal Example ---
-    with open("dummy_image.png", "w") as f: f.write("dummy")
+    with open("main.py", "w") as f: f.write("print('hello')")
+    with open("image.png", "w") as f: f.write("dummy")
 
-    multimodal_messages = Messages(
-        UserMessage(
-            "What is in this image?",
-            Images("dummy_image.png")
-        )
+    messages = Messages(
+        SystemMessage("Code:", Files("main.py", name="code_files")),
+        UserMessage("hi", Images("image.png"))
     )
-    print("--- Multimodal Render Result ---")
-    for msg in await multimodal_messages.render_latest(): print(msg)
 
-    # --- Tool-Use Example ---
-    # Simulate a tool call request from the model
-    tool_call_request = [
-        MockToolCall(id="call_123", function=MockFunction(name="add", arguments='{"a": 5, "b": 10}'))
-    ]
+    print("--- Before Moving ---")
+    print(json.dumps(await messages.render_latest(), indent=2))
 
-    tool_use_messages = Messages(
-        UserMessage("What is 5 + 10?"),
-        # Represents the model's request to call a tool
-        ToolCalls(tool_call_request),
-        # Represents the result you provide back to the model
-        ToolResults(tool_call_id="call_123", content="15"),
-        AssistantMessage("The sum is 15.")
-    )
-    print("\n--- Tool-Use Render Result ---")
-    for msg in await tool_use_messages.render_latest(): print(msg)
+    # Move the entire Files block to the user message
+    files_provider = messages.pop("code_files")
+    messages[1].append(files_provider) # Append to the end
+
+    print("\n--- After Moving ---")
+    print(json.dumps(await messages.render_latest(), indent=2))
+
+    # Prepending is just as easy: messages[1] = files_provider + messages[1]
 
     import os
-    os.remove("dummy_image.png")
+    os.remove("main.py")
+    os.remove("image.png")
 
 asyncio.run(example_3())
 ```
+**Why it's powerful:** `messages.pop("code_files")` finds and removes the provider by name, regardless of its location. Architext automatically handles the complexity of multimodal message structures, letting you focus on logic, not data format.
 
-**Expected Output:** Both examples will render into the precise dictionary format expected by modern LLM APIs (like OpenAI's), handling list-based content for multimodal messages and `tool_calls`/`tool` roles correctly.
+### Scenario 4: Granular Visibility Control for Prompt Optimization
 
----
-
-### Example 4: Pass-Through Updates and Automatic Refresh
-
-Update any piece of context from anywhere, and Architext will ensure the changes are reflected in the next render.
+To prevent model output truncation, a common trick is to add an instruction to the *final* user prompt. Managing this manually is complex. Architext provides precise visibility control.
 
 ```python
+import json
 import asyncio
-from architext import Messages, UserMessage, Files
+from architext import Messages, SystemMessage, Texts, UserMessage, AssistantMessage
 
 async def example_4():
-    # 1. Initialize with a Files provider
-    messages = Messages(UserMessage(Files(name="code_files")))
+    # Add the same named provider to multiple messages
+    done_marker = Texts("\n\nYour message **must** end with [done].", name="done_marker")
 
-    # 2. Initially, content is empty
-    print("--- Initial State (No files loaded) ---")
-    print(await messages.render_latest())
+    messages = Messages(
+        SystemMessage("You are helpful."),
+        UserMessage("hi", done_marker),
+        AssistantMessage("hello"),
+        UserMessage("hi again", done_marker),
+    )
 
-    # 3. Get a handle to the provider and update it
-    print("\n>>> Updating files via messages.provider('code_files')...")
-    files_provider = messages.provider("code_files")
-    if files_provider:
-        # Update with content for a new file in memory
-        files_provider.update("main.py", "def main():\\n    print('Hello')")
+    # 1. Hide all instances of the "done_marker" provider
+    messages.provider("done_marker").visible = False
+    # 2. Make only the very last instance visible
+    messages.provider("done_marker")[-1].visible = True
 
-    # 4. Render again. Architext detects the stale provider and refreshes it.
-    print("\n--- Render After Update ---")
-    for msg in await messages.render_latest(): print(msg)
+    new_messages = await messages.render_latest()
+    print(json.dumps(new_messages, indent=2))
 
 asyncio.run(example_4())
 ```
-
-**Expected Output:** The first render will be empty. After the update, the second render will correctly show the content of `main.py`.
+**Why it's powerful:** By naming providers, you can target them for bulk operations. A single line hides all instances, and another selectively re-enables just the one you need. This is a powerful pattern for conditional prompting, A/B testing, or managing system instructions across a long conversation.
 
 ## 🤝 Contributing
 
