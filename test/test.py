@@ -1409,6 +1409,31 @@ Files: {Files(visible=True, name="files")}
         # 5. 验证 provider 索引
         self.assertIsNotNone(messages.provider(text_provider.name))
 
+    async def test_zi_provider_in_message_and_messages(self):
+        """测试 `in` 操作符是否能检查 provider 是否存在于 Message 或 Messages 中"""
+        # 1. 准备 providers 和 messages
+        text_hi = Texts("hi")
+        text_hello = Texts("hello")
+        text_world = Texts("world")
+
+        message = UserMessage(text_hello, text_hi)
+        messages_collection = Messages(SystemMessage("System"), message)
+
+        # 2. 测试 `in` Message
+        self.assertTrue(Texts("hi") in UserMessage(Texts("hello"), Texts("hi")))
+        self.assertTrue(text_hi in message)
+        self.assertTrue(text_hello in message)
+        self.assertFalse(text_world in message)
+
+        # 3. 测试 `in` Messages
+        self.assertTrue(text_hi in messages_collection)
+        self.assertTrue(text_hello in messages_collection)
+        self.assertFalse(text_world in messages_collection)
+
+        # 4. 测试一个 Message 对象是否在 Messages 中
+        self.assertTrue(message in messages_collection)
+        self.assertFalse(UserMessage("not in collection") in messages_collection)
+
 
 # ==============================================================================
 # 6. 演示

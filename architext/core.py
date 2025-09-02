@@ -457,6 +457,15 @@ class Message(ABC):
         return len(self._items)
 
     def __repr__(self): return f"Message(role='{self.role}', items={[i.name for i in self._items]})"
+
+    def __contains__(self, item: Any) -> bool:
+        """Checks if a ContextProvider is in the message."""
+        if not isinstance(item, ContextProvider):
+            return False
+        # The `in` operator on a list checks for equality,
+        # and our custom __eq__ on ContextProvider handles the comparison logic.
+        return item in self._items
+
     def __bool__(self) -> bool:
         return bool(self._items)
     def get(self, key: str, default: Any = None) -> Any:
@@ -717,3 +726,13 @@ class Messages:
 
     def __len__(self) -> int: return len(self._messages)
     def __iter__(self): return iter(self._messages)
+
+    def __contains__(self, item: Any) -> bool:
+        """Checks if a Message or ContextProvider is in the collection."""
+        if isinstance(item, Message):
+            # Check for object identity
+            return any(item is msg for msg in self._messages)
+        if isinstance(item, ContextProvider):
+            # Check if any message contains the provider
+            return any(item in msg for msg in self._messages)
+        return False
