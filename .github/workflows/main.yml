@@ -9,6 +9,7 @@ on:
     paths-ignore:
       - 'README.md'
       - 'README_CN.md'
+      - 'LICENSE'
   release:
     types: ["published"]
 
