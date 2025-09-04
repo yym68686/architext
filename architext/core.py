@@ -468,6 +468,12 @@ class Message(ABC):
         # and our custom __eq__ on ContextProvider handles the comparison logic.
         return item in self._items
 
+    def has(self, provider_type: type) -> bool:
+        """Checks if the message contains a provider of a specific type."""
+        if not isinstance(provider_type, type) or not issubclass(provider_type, ContextProvider):
+            raise TypeError("provider_type must be a subclass of ContextProvider")
+        return any(isinstance(p, provider_type) for p in self._items)
+
     def __bool__(self) -> bool:
         return bool(self._items)
     def get(self, key: str, default: Any = None) -> Any:

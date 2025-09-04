@@ -1454,6 +1454,32 @@ Files: {Files(visible=True, name="files")}
         self.assertEqual(len(message_mixed.provider()), 1)
         self.assertIsInstance(message_mixed.provider()[0], Texts)
 
+    async def test_zaa_has_method_for_provider_type_check(self):
+        """测试 Message.has(type) 方法是否能正确检查 provider 类型"""
+        # 1. 创建一个混合类型的消息
+        message_with_text = UserMessage(Texts("hi"), Images("url"))
+
+        # 2. 测试存在的情况
+        # This line is expected to fail with an AttributeError before implementation
+        self.assertTrue(message_with_text.has(Texts))
+        self.assertTrue(message_with_text.has(Images))
+
+        # 3. 测试不存在的情况
+        self.assertFalse(message_with_text.has(Tools))
+
+        # 4. 测试空消息
+        empty_message = UserMessage()
+        self.assertFalse(empty_message.has(Texts))
+
+        # 5. 测试传入无效类型
+        with self.assertRaises(TypeError):
+            message_with_text.has(str)
+
+        with self.assertRaises(TypeError):
+            # Also test with a class that is not a subclass of ContextProvider
+            class NotAProvider: pass
+            message_with_text.has(NotAProvider)
+
 
 # ==============================================================================
 # 6. 演示
