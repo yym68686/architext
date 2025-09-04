@@ -104,9 +104,10 @@ class ContextProvider(ABC):
         return NotImplemented
 
 class Texts(ContextProvider):
-    def __init__(self, text: Optional[Union[str, Callable[[], str]]] = None, name: Optional[str] = None, visible: bool = True):
+    def __init__(self, text: Optional[Union[str, Callable[[], str]]] = None, name: Optional[str] = None, visible: bool = True, newline: bool = False):
         if text is None and name is None:
             raise ValueError("Either 'text' or 'name' must be provided.")
+        self.newline = newline
 
         # Ensure that non-callable inputs are treated as strings
         if not callable(text):
@@ -373,8 +374,11 @@ class Message(ABC):
         for item in self._items:
             block = item.get_content_block()
             if block and block.content is not None:
+                # Check if it's a Texts provider with newline=True
+                # and it's not the very first item with content.
+                if isinstance(item, Texts) and hasattr(item, 'newline') and item.newline and final_parts:
+                    final_parts.append("\n\n")
                 final_parts.append(block.content)
-
         return "".join(final_parts)
 
     def pop(self, name: str) -> Optional[ContextProvider]:

@@ -1543,6 +1543,41 @@ Files: {Files(visible=True, name="files")}
         self.assertEqual(len(message_ending_with_special), 1)
         self.assertIsInstance(message_ending_with_special[0], Texts)
 
+    async def test_zac_texts_join_parameter(self):
+        """测试 Texts provider 是否支持通过参数控制拼接方式"""
+        # 1. 测试默认行为：直接拼接
+        message_default = UserMessage(
+            Texts("First line."),
+            Texts("Second line.")
+        )
+        rendered_default = await message_default.render_latest()
+        self.assertEqual(rendered_default['content'], "First line.Second line.")
+
+        # 2. 测试新功能：使用 \n\n 拼接
+        # 假设新参数为 `newline=True`
+        message_newline = UserMessage(
+            Texts("First paragraph."),
+            Texts("Second paragraph.", newline=True)
+        )
+        rendered_newline = await message_newline.render_latest()
+        self.assertEqual(rendered_newline['content'], "First paragraph.\n\nSecond paragraph.")
+
+        # 3. 测试多个 provider 的情况
+        message_multiple = UserMessage(
+            Texts("First."),
+            Texts("Second.", newline=True),
+            Texts("Third.", newline=True)
+        )
+        rendered_multiple = await message_multiple.render_latest()
+        self.assertEqual(rendered_multiple['content'], "First.\n\nSecond.\n\nThird.")
+
+        # 4. 测试只有一个 provider 的情况
+        message_single = UserMessage(
+            Texts("Only one.", newline=True)
+        )
+        rendered_single = await message_single.render_latest()
+        self.assertEqual(rendered_single['content'], "Only one.")
+
 
 # ==============================================================================
 # 6. 演示
