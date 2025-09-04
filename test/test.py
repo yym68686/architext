@@ -1434,6 +1434,26 @@ Files: {Files(visible=True, name="files")}
         self.assertTrue(message in messages_collection)
         self.assertFalse(UserMessage("not in collection") in messages_collection)
 
+    async def test_zz_none_input_ignored(self):
+        """测试在Message初始化时，None值是否被自动忽略"""
+        # 1. 在初始化列表中包含 None
+        message = UserMessage("Hello", None, "World")
+        self.assertEqual(len(message.provider()), 2)
+        self.assertIsInstance(message.provider()[0], Texts)
+        self.assertIsInstance(message.provider()[1], Texts)
+        rendered = await message.render_latest()
+        self.assertEqual(rendered['content'], "HelloWorld")
+
+        # 2. 测试只有 None
+        message_none = SystemMessage(None)
+        self.assertEqual(len(message_none.provider()), 0)
+        self.assertFalse(message_none)
+
+        # 3. 测试混合 provider 和 None
+        message_mixed = SystemMessage(Texts("hi"), None)
+        self.assertEqual(len(message_mixed.provider()), 1)
+        self.assertIsInstance(message_mixed.provider()[0], Texts)
+
 
 # ==============================================================================
 # 6. 演示

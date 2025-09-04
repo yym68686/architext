@@ -315,6 +315,8 @@ class Message(ABC):
         self.role = role
         processed_items = []
         for item in initial_items:
+            if item is None:
+                continue
             if isinstance(item, str):
                 # Check if the string contains placeholders from f-string rendering
                 import re
@@ -471,6 +473,13 @@ class Message(ABC):
     def get(self, key: str, default: Any = None) -> Any:
         """提供类似字典的 .get() 方法来访问属性。"""
         return getattr(self, key, default)
+
+    async def render_latest(self) -> Optional[Dict[str, Any]]:
+        """Refreshes all providers in the message and returns the rendered dictionary."""
+        tasks = [provider.refresh() for provider in self._items]
+        await asyncio.gather(*tasks)
+        return self.to_dict()
+
     def to_dict(self) -> Optional[Dict[str, Any]]:
         is_multimodal = any(isinstance(p, Images) for p in self._items)
 
