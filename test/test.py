@@ -1480,6 +1480,69 @@ Files: {Files(visible=True, name="files")}
             class NotAProvider: pass
             message_with_text.has(NotAProvider)
 
+    async def test_zab_lstrip_and_rstrip(self):
+        """测试 lstrip, rstrip, 和 strip 方法是否能正确移除两侧的特定类型的 provider"""
+        # 1. 定义一个用于测试的子类
+        class SpecialTexts(Texts):
+            pass
+        url = "data:image/png;base64,FAKE_IMG"
+
+        # 2. 创建一个复杂的测试消息
+        message = UserMessage(
+            Texts("leading1"),
+            Texts("leading2"),
+            Images(url, name="image1"),
+            Texts("middle"),
+            SpecialTexts("special_middle"),
+            Images(url, name="image2"),
+            Texts("trailing1"),
+            SpecialTexts("special_trailing"), # rstrip(Texts) should stop here
+            Texts("trailing2")
+        )
+
+        # 3. 测试 rstrip(Texts)
+        r_stripped_message = UserMessage(*message.provider()) # 创建副本
+        r_stripped_message.rstrip(Texts)
+        # 应移除 "trailing2"，但在 "special_trailing" 处停止
+        self.assertEqual(len(r_stripped_message), 8)
+        self.assertIs(type(r_stripped_message[-1]), SpecialTexts)
+
+        # 4. 测试 lstrip(Texts)
+        l_stripped_message = UserMessage(*message.provider()) # 创建副本
+        l_stripped_message.lstrip(Texts)
+        # 应移除 "leading1" 和 "leading2"，但在 "image1" 处停止
+        self.assertEqual(len(l_stripped_message), 7)
+        self.assertIs(type(l_stripped_message[0]), Images)
+
+        # 5. 测试 strip(Texts)
+        stripped_message = UserMessage(*message.provider()) # 创建副本
+        stripped_message.strip(Texts)
+        # 应同时移除 "leading1", "leading2", 和 "trailing2"
+        self.assertEqual(len(stripped_message), 6)
+        self.assertIs(type(stripped_message[0]), Images)
+        self.assertIs(type(stripped_message[-1]), SpecialTexts)
+
+        # 6. 测试在一个只包含一种类型的消息上进行剥离
+        only_texts = UserMessage(Texts("a"), Texts("b"))
+        only_texts.strip(Texts)
+        self.assertEqual(len(only_texts), 0)
+
+        # 7. 测试剥离一个不包含目标类型的消息
+        only_images = UserMessage(Images("url1"), Images("url2"))
+        only_images.strip(Texts)
+        self.assertEqual(len(only_images), 2) # 不应改变
+
+        # 8. 测试在一个空消息上进行剥离
+        empty_message = UserMessage()
+        empty_message.strip(Texts)
+        self.assertEqual(len(empty_message), 0)
+
+        # 9. 测试剥离子类
+        message_ending_with_special = UserMessage(Texts("a"), SpecialTexts("b"))
+        message_ending_with_special.rstrip(SpecialTexts)
+        self.assertEqual(len(message_ending_with_special), 1)
+        self.assertIsInstance(message_ending_with_special[0], Texts)
+
 
 # ==============================================================================
 # 6. 演示

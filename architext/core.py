@@ -474,6 +474,29 @@ class Message(ABC):
             raise TypeError("provider_type must be a subclass of ContextProvider")
         return any(isinstance(p, provider_type) for p in self._items)
 
+    def lstrip(self, provider_type: type):
+        """
+        从消息的左侧（开头）移除所有指定类型的 provider。
+        移除操作会一直持续，直到遇到一个不同类型的 provider 为止。
+        """
+        while self._items and type(self._items[0]) is provider_type:
+            self.pop(self._items[0].name)
+
+    def rstrip(self, provider_type: type):
+        """
+        从消息的右侧（末尾）移除所有指定类型的 provider。
+        移除操作会一直持续，直到遇到一个不同类型的 provider 为止。
+        """
+        while self._items and type(self._items[-1]) is provider_type:
+            self.pop(self._items[-1].name)
+
+    def strip(self, provider_type: type):
+        """
+        从消息的两侧移除所有指定类型的 provider。
+        """
+        self.lstrip(provider_type)
+        self.rstrip(provider_type)
+
     def __bool__(self) -> bool:
         return bool(self._items)
     def get(self, key: str, default: Any = None) -> Any:
