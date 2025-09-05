@@ -1613,6 +1613,63 @@ Files: {Files(visible=True, name="files")}
         self.assertIn("Message(role='user', items=", actual_repr)
         self.assertIn("Message(role='assistant', items=", actual_repr)
 
+    async def test_zzb_final_message_render_logic(self):
+        """
+        最终版测试:
+        - render() 首次调用保证获取完整结果。
+        - 后续 render() 调用返回缓存结果，不会自动刷新。
+        - refresh() 显式刷新内容。
+        - render_latest() 总是获取最新内容。
+        """
+        from datetime import datetime
+        import time
+
+        # 1. 创建带有动态 provider 的 Message
+        timestamp_provider = Texts(lambda: str(datetime.now().timestamp()))
+        message = UserMessage("Time: ", timestamp_provider)
+
+        # 2. 第一次调用 render() - 应该刷新并返回完整内容
+        rendered_1 = await message.render()
+        content1 = rendered_1['content']
+        timestamp1_str = content1.replace("Time: ", "")
+        self.assertTrue(timestamp1_str, "render() 第一次调用应返回完整动态内容")
+
+        # 3. 第二次调用 render() - 不应自动刷新，返回缓存的内容
+        time.sleep(1)
+        rendered_2 = await message.render()
+        content2 = rendered_2['content']
+        self.assertEqual(content1, content2, "第二次调用 render() 应返回缓存内容，不应刷新")
+
+        # 4. 调用 refresh() - 显式刷新
+        time.sleep(1)
+        await message.refresh()
+
+        # 5. refresh() 后调用 render() - 应该返回刚刚刷新的新内容
+        rendered_3 = await message.render()
+        content3 = rendered_3['content']
+        timestamp3_str = content3.replace("Time: ", "")
+        self.assertNotEqual(content2, content3, "refresh() 后 render() 应返回新内容")
+
+        # 6. 调用 render_latest() - 总是获取最新内容
+        time.sleep(1)
+        rendered_latest = await message.render_latest()
+        content_latest = rendered_latest['content']
+        timestamp_latest_str = content_latest.replace("Time: ", "")
+        self.assertNotEqual(content3, content_latest, "render_latest() 应总是获取最新内容")
+
+        # 7. 测试 ToolResults
+        tool_results_msg = ToolResults(tool_call_id="call_123", content="Result from tool")
+        # ToolResults's content is static, so render() should always return the same full content
+        rendered_tool_1 = await tool_results_msg.render()
+        self.assertEqual(rendered_tool_1, {
+            "role": "tool",
+            "tool_call_id": "call_123",
+            "content": "Result from tool"
+        })
+        # Subsequent calls should also work
+        rendered_tool_2 = await tool_results_msg.render()
+        self.assertEqual(rendered_tool_1, rendered_tool_2)
+
 
 # ==============================================================================
 # 6. 演示

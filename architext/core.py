@@ -519,10 +519,27 @@ class Message(ABC):
         """提供类似字典的 .get() 方法来访问属性。"""
         return getattr(self, key, default)
 
-    async def render_latest(self) -> Optional[Dict[str, Any]]:
-        """Refreshes all providers in the message and returns the rendered dictionary."""
+    async def refresh(self):
+        """刷新此消息中的所有 provider。"""
         tasks = [provider.refresh() for provider in self._items]
         await asyncio.gather(*tasks)
+
+    async def render(self) -> Optional[Dict[str, Any]]:
+        """
+        渲染消息为字典。首次调用时会隐式刷新以确保动态内容被加载。
+        后续调用将返回缓存版本，除非手动调用了 refresh()。
+        """
+        # 检查是否是首次渲染
+        is_first_render = not all(hasattr(p, '_cached_content') and p._cached_content is not None for p in self._items if p._is_stale)
+
+        if is_first_render:
+            await self.refresh()
+
+        return self.to_dict()
+
+    async def render_latest(self) -> Optional[Dict[str, Any]]:
+        """始终刷新并返回最新的渲染结果。"""
+        await self.refresh()
         return self.to_dict()
 
     def to_dict(self) -> Optional[Dict[str, Any]]:
