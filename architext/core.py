@@ -128,6 +128,11 @@ class Texts(ContextProvider):
         else:
             _name = name
         super().__init__(_name, visible=visible)
+        if not self._is_dynamic:
+            self._cached_content = self.content
+            # The content is cached, but it's still "stale" from the perspective
+            # of the async refresh cycle. Let the first refresh formalize it.
+            self._is_stale = True
 
     async def refresh(self):
         if self._is_dynamic:
@@ -191,6 +196,10 @@ class Tools(ContextProvider):
     def __init__(self, tools_json: Optional[List[Dict]] = None, name: str = "tools", visible: bool = True):
         super().__init__(name, visible=visible)
         self._tools_json = tools_json or []
+        # Pre-render and cache the content, but leave it stale for the first refresh
+        if self._tools_json:
+            self._cached_content = f"<tools>{str(self._tools_json)}</tools>"
+        self._is_stale = True
     def update(self, tools_json: List[Dict]):
         self._tools_json = tools_json
         self.mark_stale()
@@ -289,6 +298,9 @@ class Images(ContextProvider):
     def __init__(self, url: str, name: Optional[str] = None, visible: bool = True):
         super().__init__(name or url, visible=visible)
         self.url = url
+        if self.url.startswith("data:"):
+            self._cached_content = self.url
+        self._is_stale = True
     def update(self, url: str):
         self.url = url
         self.mark_stale()

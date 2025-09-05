@@ -1578,6 +1578,26 @@ Files: {Files(visible=True, name="files")}
         rendered_single = await message_single.render_latest()
         self.assertEqual(rendered_single['content'], "Only one.")
 
+    async def test_zad_simple_render_without_refresh(self):
+        """测试 Messages(UserMessage('hi')).render() 是否能直接同步渲染"""
+        # This test checks if a simple message can be rendered synchronously
+        # without an explicit `await refresh()` or `await render_latest()`.
+        # Calling the synchronous render method directly on a new instance
+        rendered = Messages(UserMessage("hi", Images(url="data:image/png;base64,FAKE"))).render()
+
+        # The current implementation will likely fail here, returning []
+        self.assertEqual(len(rendered), 1)
+        self.assertEqual(rendered[0]['role'], 'user')
+
+        # Now we expect a list for multimodal content
+        content = rendered[0]['content']
+        self.assertIsInstance(content, list)
+        self.assertEqual(len(content), 2)
+        self.assertEqual(content[0]['type'], 'text')
+        self.assertEqual(content[0]['text'], 'hi')
+        self.assertEqual(content[1]['type'], 'image_url')
+        self.assertEqual(content[1]['image_url']['url'], "data:image/png;base64,FAKE")
+
 
 # ==============================================================================
 # 6. 演示
