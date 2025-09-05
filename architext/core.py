@@ -324,19 +324,21 @@ class Images(ContextProvider):
 
 # 3. 消息类 (已合并 MessageContent)
 class Message(ABC):
-    def __init__(self, role: str, *initial_items: Union[ContextProvider, str, list]):
+    def __init__(self, role: str, *initial_items: Union[ContextProvider, str, list, 'Message']):
         self.role = role
         processed_items = []
         for item in initial_items:
             if item is None:
                 continue
-            if isinstance(item, str):
-                # Check if the string contains placeholders from f-string rendering
+
+            # This is the new recursive flattening logic
+            if isinstance(item, Message):
+                processed_items.extend(item.provider())
+            elif isinstance(item, str):
                 import re
                 placeholder_pattern = re.compile(r'(__provider_placeholder_[a-f0-9]{32}__)')
                 parts = placeholder_pattern.split(item)
-
-                if len(parts) > 1: # Placeholders were found
+                if len(parts) > 1:
                     for part in parts:
                         if not part: continue
                         if placeholder_pattern.match(part):
@@ -345,18 +347,14 @@ class Message(ABC):
                                 processed_items.append(provider)
                         else:
                             processed_items.append(Texts(text=part))
-                else: # No placeholders, just a regular string
+                else:
                     processed_items.append(Texts(text=item))
-
-            elif isinstance(item, Message):
-                processed_items.extend(item.provider())
             elif isinstance(item, ContextProvider):
                 processed_items.append(item)
             elif isinstance(item, list):
                 for sub_item in item:
                     if not isinstance(sub_item, dict) or 'type' not in sub_item:
                         raise ValueError("List items must be dicts with a 'type' key.")
-
                     item_type = sub_item['type']
                     if item_type == 'text':
                         processed_items.append(Texts(text=sub_item.get('text', '')))
@@ -612,12 +610,20 @@ class ToolCalls(Message):
 
 class ToolResults(Message):
     """Represents a tool message with the result of a single tool call."""
-    def __init__(self, tool_call_id: str, content: str):
-        # We pass a Texts provider to the parent so it can be rendered,
-        # but the primary way to access content for ToolResults is via its dict representation.
-        super().__init__("tool", Texts(text=content))
+    def __init__(self, tool_call_id: str, content: Union[str, Message]):
+        # The base Message class now handles the absorption of a Message object.
+        # We just need to pass the content to the parent __init__.
+        # For ToolResults, we primarily care about the textual content.
+        if isinstance(content, Message):
+             # Extract only text-like providers to pass to the parent
+            text_providers = [p for p in content.provider() if not isinstance(p, Images)]
+            super().__init__("tool", *text_providers)
+        else:
+            super().__init__("tool", content)
+
         self.tool_call_id = tool_call_id
-        self._content = content
+        # After initialization, render the content to a simple string for _content.
+        self._content = self._render_content()
 
     def to_dict(self) -> Dict[str, Any]:
         return {

@@ -1613,6 +1613,45 @@ Files: {Files(visible=True, name="files")}
         self.assertIn("Message(role='user', items=", actual_repr)
         self.assertIn("Message(role='assistant', items=", actual_repr)
 
+    async def test_zaf_message_absorption(self):
+        """测试Message对象是否能吸收嵌套的Message对象作为其内容"""
+        # 1. ToolResults吸收UserMessage
+        tool_results_1 = ToolResults(tool_call_id="call_1", content=UserMessage("hi"))
+        rendered_1 = await tool_results_1.render_latest()
+        self.assertEqual(rendered_1['content'], "hi")
+        self.assertEqual(rendered_1['tool_call_id'], "call_1")
+
+        # 2. UserMessage吸收AssistantMessage
+        user_message_1 = UserMessage("prefix", AssistantMessage("absorbed content"))
+        rendered_user_1 = await user_message_1.render_latest()
+        self.assertEqual(rendered_user_1['content'], "prefixabsorbed content")
+        self.assertEqual(len(user_message_1.provider()), 2) # Should be flattened
+
+        # 3. 复杂嵌套
+        final_message = ToolResults(tool_call_id="call_final", content=UserMessage("A", AssistantMessage("B", UserMessage("C"))))
+        rendered_final = await final_message.render_latest()
+        self.assertEqual(rendered_final['content'], "ABC")
+
+        # 4. 组合情况: ToolResults(UserMessage(Texts("a"), Texts("b"))) -> content="ab"
+        tool_results_2 = ToolResults(tool_call_id="call_2", content=UserMessage(Texts("a"), Texts("b")))
+        rendered_2 = await tool_results_2.render_latest()
+        self.assertEqual(rendered_2['content'], "ab")
+
+        # 5. 包含多模态内容的情况 (ToolResults应该只提取文本)
+        tool_results_3 = ToolResults(tool_call_id="call_3", content=UserMessage("text part", Images(url="some_url")))
+        rendered_3 = await tool_results_3.render_latest()
+        self.assertEqual(rendered_3['content'], "text part") # Images should be ignored
+
+        # 6. 直接传入字符串的情况应保持不变
+        tool_results_4 = ToolResults(tool_call_id="call_4", content="just a string")
+        rendered_4 = await tool_results_4.render_latest()
+        self.assertEqual(rendered_4['content'], "just a string")
+
+        # 7. 传入一个空的 Message
+        tool_results_5 = ToolResults(tool_call_id="call_5", content=UserMessage())
+        rendered_5 = await tool_results_5.render_latest()
+        self.assertEqual(rendered_5['content'], "")
+
     async def test_zzb_final_message_render_logic(self):
         """
         最终版测试:
