@@ -1598,6 +1598,21 @@ Files: {Files(visible=True, name="files")}
         self.assertEqual(content[1]['type'], 'image_url')
         self.assertEqual(content[1]['image_url']['url'], "data:image/png;base64,FAKE")
 
+    async def test_zae_messages_representation(self):
+        """测试 Messages 对象的 __repr__ 方法是否提供可读的输出"""
+        messages = Messages(
+            UserMessage("Hello"),
+            AssistantMessage("Hi there!")
+        )
+
+        actual_repr = repr(messages)
+
+        # 一个可读的字符串形式应该像 Messages([...]) 这样，并包含其内部 message 的 repr
+        self.assertTrue(actual_repr.startswith("Messages(["), f"期望输出以 'Messages([' 开头，但得到 '{actual_repr}'")
+        self.assertTrue(actual_repr.endswith("])"), f"期望输出以 '])' 结尾，但得到 '{actual_repr}'")
+        self.assertIn("Message(role='user', items=", actual_repr)
+        self.assertIn("Message(role='assistant', items=", actual_repr)
+
 
 # ==============================================================================
 # 6. 演示

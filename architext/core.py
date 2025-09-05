@@ -780,7 +780,8 @@ class Messages:
 
     def __len__(self) -> int: return len(self._messages)
     def __iter__(self): return iter(self._messages)
-
+    def __repr__(self):
+        return f"Messages({repr(self._messages)})"
     def __contains__(self, item: Any) -> bool:
         """Checks if a Message or ContextProvider is in the collection."""
         if isinstance(item, Message):
