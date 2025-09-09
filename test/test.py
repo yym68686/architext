@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 
 from architext import *
-
+from typing import Optional, Union, Callable
 # ==============================================================================
 # 单元测试部分
 # ==============================================================================
@@ -1709,6 +1709,28 @@ Files: {Files(visible=True, name="files")}
         rendered_tool_2 = await tool_results_msg.render()
         self.assertEqual(rendered_tool_1, rendered_tool_2)
 
+    async def test_zag_iadd_on_provider(self):
+        """测试对 provider 使用 += 操作符来追加文本"""
+        class Goal(Texts):
+            def __init__(self, text: Optional[Union[str, Callable[[], str]]] = None, name: str = "goal"):
+                super().__init__(text=text, name=name)
+
+            async def render(self) -> Optional[str]:
+                content = await super().render()
+                if content is None:
+                    return None
+                return f"<goal>{content}</goal>"
+
+        messages = Messages(UserMessage(Goal("hi")))
+
+        # This is the new syntax we want to test
+        goal_provider = messages.provider("goal")
+        goal_provider += "test"
+
+        rendered = await messages.render_latest()
+
+        self.assertEqual(len(rendered), 1)
+        self.assertEqual(rendered[0]['content'], "<goal>hitest</goal>")
 
 # ==============================================================================
 # 6. 演示

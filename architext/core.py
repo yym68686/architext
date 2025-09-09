@@ -192,6 +192,13 @@ class Texts(ContextProvider):
         # For static content, compare the actual content.
         return self.content == other.content
 
+    def __iadd__(self, other):
+        if isinstance(other, str):
+            new_text = self.content + other
+            self.update(new_text)
+            return self
+        return NotImplemented
+
 class Tools(ContextProvider):
     def __init__(self, tools_json: Optional[List[Dict]] = None, name: str = "tools", visible: bool = True):
         super().__init__(name, visible=visible)
