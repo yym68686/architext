@@ -199,6 +199,15 @@ class Texts(ContextProvider):
             return self
         return NotImplemented
 
+    def __add__(self, other):
+        if isinstance(other, str):
+            # Create a new instance of the same class with the combined content
+            return type(self)(text=self.content + other, name=self.name, visible=self.visible, newline=self.newline)
+        elif isinstance(other, Message):
+            new_items = [self] + other.provider()
+            return type(other)(*new_items)
+        return NotImplemented
+
 class Tools(ContextProvider):
     def __init__(self, tools_json: Optional[List[Dict]] = None, name: str = "tools", visible: bool = True):
         super().__init__(name, visible=visible)
@@ -718,7 +727,27 @@ class Messages:
 
     def render(self) -> List[Dict[str, Any]]:
         results = [msg.to_dict() for msg in self._messages]
-        return [res for res in results if res]
+        non_empty_results = [res for res in results if res]
+
+        if not non_empty_results:
+            return []
+
+        merged_results = [non_empty_results[0]]
+        for i in range(1, len(non_empty_results)):
+            current_msg = non_empty_results[i]
+            last_merged_msg = merged_results[-1]
+
+            # Merge if roles match, no tool_calls, and content is string
+            if (current_msg.get('role') == last_merged_msg.get('role') and
+                'tool_calls' not in current_msg and
+                'tool_calls' not in last_merged_msg and
+                isinstance(current_msg.get('content'), str) and
+                isinstance(last_merged_msg.get('content'), str)):
+                last_merged_msg['content'] += current_msg.get('content', '')
+            else:
+                merged_results.append(current_msg)
+
+        return merged_results
 
     async def render_latest(self) -> List[Dict[str, Any]]:
         await self.refresh()

@@ -1732,6 +1732,57 @@ Files: {Files(visible=True, name="files")}
         self.assertEqual(len(rendered), 1)
         self.assertEqual(rendered[0]['content'], "<goal>hitest</goal>")
 
+    async def test_zz_user_message_auto_merging(self):
+        """测试连续的UserMessage是否能自动合并"""
+        # 场景1: 初始化时合并
+        messages_init = Messages(UserMessage("hi"), UserMessage("hi2"))
+        self.assertEqual(len(messages_init), 1, "初始化时，两个连续的UserMessage应该合并为一个")
+        self.assertEqual(len(messages_init[0]), 2, "合并后的UserMessage应该包含两个Texts provider")
+
+        rendered_init = await messages_init.render_latest()
+        self.assertEqual(rendered_init[0]['content'], "hihi2", "合并后渲染的内容不正确")
+
+        # 场景2: 追加时合并
+        messages_append = Messages(UserMessage("hi"))
+        messages_append.append(UserMessage("hi2"))
+        self.assertEqual(len(messages_append), 1, "追加时，两个连续的UserMessage应该合并为一个")
+        self.assertEqual(len(messages_append[0]), 2, "追加合并后的UserMessage应该包含两个Texts provider")
+
+        rendered_append = await messages_append.render_latest()
+        self.assertEqual(rendered_append[0]['content'], "hihi2", "追加合并后渲染的内容不正确")
+
+        # 场景3: 追加RoleMessage时合并
+        messages_append.append(RoleMessage("user", "hi3"))
+        self.assertEqual(len(messages_append), 1, "追加RoleMessage时，连续的UserMessage应该合并为一个")
+        self.assertEqual(len(messages_append[0]), 3, "追加RoleMessage合并后的UserMessage应该包含三个Texts provider")
+
+        rendered_append_role = await messages_append.render_latest()
+        self.assertEqual(rendered_append_role[0]['content'], "hihi2hi3", "追加RoleMessage合并后渲染的内容不正确")
+
+        # 场景4: 追加包含ContextProvider和字符串组合的RoleMessage时合并
+        class Goal(Texts):
+            def __init__(self, text: Optional[Union[str, Callable[[], str]]] = None, name: str = "goal", visible: bool = True, newline: bool = False):
+                super().__init__(text=text, name=name, visible=visible, newline=newline)
+
+            async def render(self) -> Optional[str]:
+                content = await super().render()
+                if content is None:
+                    return None
+                return f"<goal>{content}</goal>"
+
+        messages_append.append(RoleMessage("user", Goal("goal") + "hi4"))
+        self.assertEqual(len(messages_append), 1, "追加(ContextProvider + str)的RoleMessage时，未能正确合并")
+        self.assertEqual(len(messages_append[0]), 4, "追加(ContextProvider + str)的RoleMessage合并后的provider数量不正确")
+
+        rendered_append_combo = await messages_append.render_latest()
+        self.assertEqual(rendered_append_combo[0]['content'], "hihi2hi3<goal>goalhi4</goal>", "追加(ContextProvider + str)合并后渲染的内容不正确")
+
+        # 场景5: 被空消息隔开的同角色消息在渲染时合并
+        messages_separated = Messages(UserMessage("hi"), AssistantMessage(""), UserMessage("hi2"))
+        rendered_separated = await messages_separated.render_latest()
+        self.assertEqual(len(rendered_separated), 1, "被空消息隔开的同角色消息在渲染时应该合并")
+        self.assertEqual(rendered_separated[0]['content'], "hihi2", "被空消息隔开的同角色消息合并后内容不正确")
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================
