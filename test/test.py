@@ -1783,6 +1783,45 @@ Files: {Files(visible=True, name="files")}
         self.assertEqual(len(rendered_separated), 1, "被空消息隔开的同角色消息在渲染时应该合并")
         self.assertEqual(rendered_separated[0]['content'], "hihi2", "被空消息隔开的同角色消息合并后内容不正确")
 
+    async def test_zzc_files_update_with_head(self):
+        """测试 Files.update 是否支持 head 参数以及新的 refresh 逻辑"""
+        test_file = "test_file_head.txt"
+        file_content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
+        with open(test_file, "w", encoding='utf-8') as f:
+            f.write(file_content)
+
+        try:
+            files_provider = Files()
+            messages = Messages(UserMessage(files_provider))
+
+            # 1. Test update with head=3
+            files_provider.update(path=test_file, head=3)
+            rendered_head = await messages.render_latest()
+            expected_head_content = "Line 1\nLine 2\nLine 3"
+            self.assertIn(f"<file_content>{expected_head_content}</file_content>", rendered_head[0]['content'])
+            self.assertNotIn("Line 4", rendered_head[0]['content'])
+
+            # 2. Test update without head (default behavior)
+            files_provider.update(path=test_file)
+            rendered_full = await messages.render_latest()
+            self.assertIn(f"<file_content>{file_content}</file_content>", rendered_full[0]['content'])
+
+            # 3. Test that refresh overwrites manual content when file exists
+            files_provider.update(path=test_file, content="manual content")
+            rendered_overwritten = await messages.render_latest()
+            self.assertIn(f"<file_content>{file_content}</file_content>", rendered_overwritten[0]['content'])
+            self.assertNotIn("manual content", rendered_overwritten[0]['content'])
+
+            # 4. Test that manual content is kept if file does not exist
+            non_existent_file = "non_existent_for_sure.txt"
+            files_provider.update(path=non_existent_file, content="manual content to keep")
+            rendered_kept = await messages.render_latest()
+            self.assertIn("<file_content>manual content to keep</file_content>", rendered_kept[0]['content'])
+
+        finally:
+            if os.path.exists(test_file):
+                os.remove(test_file)
+
 # ==============================================================================
 # 6. 演示
 # ==============================================================================

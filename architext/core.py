@@ -233,73 +233,96 @@ class Files(ContextProvider):
     def __init__(self, *paths: Union[str, List[str]], name: str = "files", visible: bool = True):
         super().__init__(name, visible=visible)
         self._files: Dict[str, str] = {}
+        self._file_sources: Dict[str, Dict] = {}
 
         file_paths: List[str] = []
         if paths:
-            # Handle the case where the first argument is a list of paths, e.g., Files(['a', 'b'])
             if len(paths) == 1 and isinstance(paths[0], list):
                 file_paths.extend(paths[0])
-            # Handle the case where arguments are individual string paths, e.g., Files('a', 'b')
             else:
                 file_paths.extend(paths)
 
         if file_paths:
             for path in file_paths:
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        self._files[path] = f.read()
-                except FileNotFoundError:
-                    logging.warning(f"File not found during initialization: {path}. Skipping.")
-                except Exception as e:
-                    logging.error(f"Error reading file {path} during initialization: {e}")
+                self.update(path)
+
+    def _read_from_disk(self, path: str, head: Optional[int] = None) -> str:
+        """Reads content from a file on disk, respecting the head parameter."""
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                if head is not None and head > 0:
+                    lines = []
+                    for _ in range(head):
+                        try:
+                            lines.append(next(f))
+                        except StopIteration:
+                            break
+                    return "".join(lines).rstrip('\n')
+                else:
+                    return f.read()
+        except FileNotFoundError:
+            raise
+        except Exception as e:
+            logging.error(f"Error reading file {path}: {e}")
+            return f"[Error: Could not read file at path '{path}': {e}]"
 
     async def refresh(self):
         """
-        Overrides the default refresh behavior. It synchronizes the content of
-        all tracked files with the file system. If a file is not found, its
-        content is updated to reflect the error.
+        Synchronizes content for files sourced from disk.
+        Content set manually is overwritten if the file exists, but preserved if it does not.
         """
         is_changed = False
-        for path in list(self._files.keys()):
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    new_content = f.read()
-                if self._files.get(path) != new_content:
-                    self._files[path] = new_content
-                    is_changed = True
-            except FileNotFoundError:
-                error_msg = f"[Error: File not found at path '{path}']"
-                if self._files.get(path) != error_msg:
-                    self._files[path] = error_msg
-                    is_changed = True
-            except Exception as e:
-                error_msg = f"[Error: Could not read file at path '{path}': {e}]"
-                if self._files.get(path) != error_msg:
-                    self._files[path] = error_msg
-                    is_changed = True
+        for path, spec in list(self._file_sources.items()):
+            if spec.get('source') == 'disk':
+                try:
+                    head = spec.get('head')
+                    new_content = self._read_from_disk(path, head)
+                    if self._files.get(path) != new_content:
+                        self._files[path] = new_content
+                        is_changed = True
+                except FileNotFoundError:
+                    error_msg = f"[Error: File not found at path '{path}']"
+                    if self._files.get(path) != error_msg:
+                        self._files[path] = error_msg
+                        is_changed = True
+            elif spec.get('source') == 'manual':
+                try:
+                    # File exists, so we must overwrite manual content.
+                    head = spec.get('head')
+                    new_content = self._read_from_disk(path, head)
+                    if self._files.get(path) != new_content:
+                        self._files[path] = new_content
+                        is_changed = True
+                    # If we are here, manual content was overwritten by disk content,
+                    # so we should update the source.
+                    self._file_sources[path] = {'source': 'disk'}
+
+                except FileNotFoundError:
+                    # File does not exist, so we keep the manual content. No change.
+                    pass
 
         if is_changed:
             self.mark_stale()
-
         await super().refresh()
 
-    def update(self, path: str, content: Optional[str] = None):
+    def update(self, path: str, content: Optional[str] = None, head: Optional[int] = None):
         """
-        Updates a single file. If content is provided, it updates the file in
-        memory. If content is None, it reads the file from disk.
+        Updates a single file's content and its source specification.
         """
         if content is not None:
             self._files[path] = content
+            self._file_sources[path] = {'source': 'manual'}
         else:
             try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    self._files[path] = f.read()
+                self._files[path] = self._read_from_disk(path, head)
+                spec = {'source': 'disk'}
+                if head is not None and head > 0:
+                    spec['head'] = head
+                self._file_sources[path] = spec
             except FileNotFoundError:
-                logging.error(f"File not found for update: {path}.")
                 self._files[path] = f"[Error: File not found at path '{path}']"
-            except Exception as e:
-                logging.error(f"Error reading file for update {path}: {e}.")
-                self._files[path] = f"[Error: Could not read file at path '{path}': {e}]"
+                # Even if not found, we track it as sourced from disk.
+                self._file_sources[path] = {'source': 'disk'}
         self.mark_stale()
     async def render(self) -> str:
         if not self._files: return None
