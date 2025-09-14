@@ -305,14 +305,35 @@ class Files(ContextProvider):
             self.mark_stale()
         await super().refresh()
 
-    def update(self, path: str, content: Optional[str] = None, head: Optional[int] = None):
+    def update(self, path: str, content: Optional[str] = None, head: Optional[Union[int, str]] = None):
         """
         Updates a single file's content and its source specification.
         """
+        if head is not None:
+            try:
+                head = int(head)
+            except (ValueError, TypeError):
+                logging.warning(f"Invalid 'head' parameter for file '{path}': {head}. Must be an integer. Ignoring.")
+                head = None
+
         if content is not None:
-            self._files[path] = content
-            self._file_sources[path] = {'source': 'manual'}
+            # New logic: if head is also provided, decide what to do with content.
+            if head is not None and head > 0:
+                try:
+                    # If file exists, prioritize reading from disk.
+                    self._files[path] = self._read_from_disk(path, head)
+                    self._file_sources[path] = {'source': 'disk', 'head': head}
+                except FileNotFoundError:
+                    # If file does not exist, use the provided content's head.
+                    lines = content.split('\n')
+                    self._files[path] = "\n".join(lines[:head])
+                    self._file_sources[path] = {'source': 'manual', 'head': head}
+            else:
+                # Original logic for when only content is provided.
+                self._files[path] = content
+                self._file_sources[path] = {'source': 'manual'}
         else:
+            # Original logic for when only path (and optional head) is provided.
             try:
                 self._files[path] = self._read_from_disk(path, head)
                 spec = {'source': 'disk'}
@@ -321,7 +342,6 @@ class Files(ContextProvider):
                 self._file_sources[path] = spec
             except FileNotFoundError:
                 self._files[path] = f"[Error: File not found at path '{path}']"
-                # Even if not found, we track it as sourced from disk.
                 self._file_sources[path] = {'source': 'disk'}
         self.mark_stale()
     async def render(self) -> str:

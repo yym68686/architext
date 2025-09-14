@@ -1791,11 +1791,13 @@ Files: {Files(visible=True, name="files")}
             f.write(file_content)
 
         try:
-            files_provider = Files()
-            messages = Messages(UserMessage(files_provider))
+            messages = Messages(UserMessage(Files(name="files")))
 
-            # 1. Test update with head=3
+            # 1. Test update with head=3 using the provider from Messages
+            files_provider = messages.provider("files")
+            self.assertIsInstance(files_provider, Files)
             files_provider.update(path=test_file, head=3)
+
             rendered_head = await messages.render_latest()
             expected_head_content = "Line 1\nLine 2\nLine 3"
             self.assertIn(f"<file_content>{expected_head_content}</file_content>", rendered_head[0]['content'])
@@ -1821,6 +1823,66 @@ Files: {Files(visible=True, name="files")}
         finally:
             if os.path.exists(test_file):
                 os.remove(test_file)
+
+    async def test_zzd_files_update_with_string_head(self):
+        """测试 Files.update 是否能自动将字符串 head 参数转换为整数"""
+        test_file = "test_file_string_head.txt"
+        file_content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
+        with open(test_file, "w", encoding='utf-8') as f:
+            f.write(file_content)
+
+        try:
+            messages = Messages(UserMessage(Files(name="files")))
+
+            # Test update with head="3"
+            files_provider = messages.provider("files")
+            self.assertIsInstance(files_provider, Files)
+            # This is the part that will likely fail before implementation
+            files_provider.update(path=test_file, head="3")
+
+            rendered_head = await messages.render_latest()
+            expected_head_content = "Line 1\nLine 2\nLine 3"
+            self.assertIn(f"<file_content>{expected_head_content}</file_content>", rendered_head[0]['content'])
+            self.assertNotIn("Line 4", rendered_head[0]['content'])
+
+        finally:
+            if os.path.exists(test_file):
+                os.remove(test_file)
+
+    async def test_zzc_files_update_with_head_and_content(self):
+        """测试update同时设置path, content, head时的行为"""
+        existing_file = "test_file_existing.txt"
+        non_existent_file = "test_file_non_existent.txt"
+        existing_content = "Line 1 (from file)\nLine 2 (from file)\nLine 3 (from file)\nLine 4 (from file)"
+        manual_content = "Line 1 (manual)\nLine 2 (manual)\nLine 3 (manual)\nLine 4 (manual)"
+
+        # --- 场景1: 文件存在 ---
+        with open(existing_file, "w", encoding='utf-8') as f:
+            f.write(existing_content)
+        try:
+            messages = Messages(UserMessage(Files(name="files")))
+            files_provider = messages.provider("files")
+            files_provider.update(path=existing_file, content=manual_content, head=2)
+            rendered_existing = await messages.render_latest()
+            expected_existing_head = "Line 1 (from file)\nLine 2 (from file)"
+            self.assertIn(f"<file_content>{expected_existing_head}</file_content>", rendered_existing[0]['content'])
+            self.assertNotIn("manual", rendered_existing[0]['content'])
+        finally:
+            if os.path.exists(existing_file):
+                os.remove(existing_file)
+
+        # --- 场景2: 文件不存在 ---
+        try:
+            messages = Messages(UserMessage(Files(name="files")))
+            files_provider = messages.provider("files")
+            files_provider.update(path=non_existent_file, content=manual_content, head=2)
+            rendered_non_existent = await messages.render_latest()
+            expected_manual_head = "Line 1 (manual)\nLine 2 (manual)"
+            self.assertIn(f"<file_content>{expected_manual_head}</file_content>", rendered_non_existent[0]['content'])
+            self.assertNotIn("from file", rendered_non_existent[0]['content'])
+        finally:
+            if os.path.exists(non_existent_file):
+                os.remove(non_existent_file)
 
 # ==============================================================================
 # 6. 演示
