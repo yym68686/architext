@@ -423,8 +423,16 @@ class Message(ABC):
                             processed_items.append(Images(url=image_url))
                     else:
                         raise ValueError(f"Unsupported item type in list: {item_type}")
+            elif isinstance(item, dict):
+                item_type = item.get('type')
+                if item_type == 'image_url':
+                    image_url = item.get('image_url', {}).get('url')
+                    if image_url:
+                        processed_items.append(Images(url=image_url))
+                else:
+                    raise ValueError(f"Unsupported dict item type: {item_type}")
             else:
-                raise TypeError(f"Unsupported item type: {type(item)}. Must be str, ContextProvider, or list.")
+                raise TypeError(f"Unsupported item type: {type(item)}. Must be str, ContextProvider, list, or dict.")
         self._items: List[ContextProvider] = processed_items
         self._parent_messages: Optional['Messages'] = None
 
