@@ -1909,6 +1909,28 @@ Files: {Files(visible=True, name="files")}
         rendered = await message.render_latest()
         self.assertEqual(rendered['content'][0]['image_url']['url'], image_dict['image_url']['url'])
 
+    async def test_zzd_texts_cache_control(self):
+        """测试 Texts provider deepcopy in relation to dynamic content"""
+        import copy
+        counter = 0
+        def dynamic_content():
+            nonlocal counter
+            counter += 1
+            return str(counter)
+
+        # When a message with a dynamic provider is deep-copied,
+        # the dynamic nature (the callable) should be preserved.
+        counter = 0
+        # provider_in_fstring = f"{Texts(lambda: dynamic_content())}"
+        provider_in_fstring = f"{Texts(dynamic_content)}"
+        messages_copied = copy.deepcopy(Messages(UserMessage(provider_in_fstring)))
+
+        # Each call to render_latest() should re-evaluate the dynamic content.
+        await messages_copied.render_latest()
+        await messages_copied.render_latest()
+        await messages_copied.render_latest()
+        self.assertEqual(counter, 3, "Dynamic function should be re-evaluated on each render_latest call")
+
 
 # ==============================================================================
 # 6. 演示

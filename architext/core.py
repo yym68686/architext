@@ -6,6 +6,7 @@ import hashlib
 import mimetypes
 import uuid
 import threading
+import copy
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Union, Callable
@@ -182,6 +183,15 @@ class Texts(ContextProvider):
         """Custom state for unpickling."""
         # Just restore the dictionary. The transformation is one-way.
         self.__dict__.update(state)
+
+    def __deepcopy__(self, memo):
+        """Custom deepcopy to preserve dynamic content by copying the callable."""
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            setattr(result, k, copy.deepcopy(v, memo))
+        return result
 
     def __eq__(self, other):
         if not isinstance(other, Texts):
